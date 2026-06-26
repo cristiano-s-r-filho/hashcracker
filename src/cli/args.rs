@@ -11,7 +11,7 @@ pub struct HashEntry {
     pub username: Option<String>,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(
     name = "hashcracker",
     version,

@@ -35,27 +35,6 @@ pub fn emit_json(event: &OutputEvent) {
     }
 }
 
-// ── Terminal banner ─────────────────────────────────────────────────
-
-pub fn print_banner() {
-    let cyan = Rgb(0, 200, 255);
-    let green = Rgb(0, 255, 100);
-    let yellow = Rgb(255, 200, 0);
-    let dim = Rgb(100, 100, 120);
-
-    println!();
-    println!("{}", "  ╔══════════════════════════════════════════╗".color(cyan));
-    println!("{}", "  ║                                      ║".color(cyan));
-    println!("  ║   {}   {}   ║",
-        "HASH CRACKER".bold().color(green),
-        "v0.5-beta".color(yellow));
-    println!("{}", "  ║   GPU-Accelerated Password Recovery   ║".color(cyan));
-    println!("  ║   {} hash types · Rust + Vulkan  ║",
-        "35".color(dim));
-    println!("{}", "  ╚══════════════════════════════════════════╝".color(cyan));
-    println!();
-}
-
 // ── Found entry display ─────────────────────────────────────────────
 
 pub fn print_found_entry(hash: &str, password: &str, hex_mode: bool) {
@@ -164,26 +143,4 @@ pub fn print_bench_footer(results: &[(&str, f64)]) {
     println!("{}", "  ╚════════════════════════════════════════════╝".color(cyan));
 }
 
-// ── Configuration header ────────────────────────────────────────────
 
-pub fn print_config(hash_type: &str, mode_desc: &str, hash_info: &str, salt_display: Option<&str>, num_passwords: u64, num_targets: usize) {
-    let cyan = Rgb(0, 200, 255);
-    let green = Rgb(0, 255, 100);
-    let yellow = Rgb(255, 200, 0);
-
-    println!("{}", "  ╔══════════════════════════════════════════╗".color(cyan));
-    println!("  ║   {}                            ║",
-        "Configuration".bold().color(green));
-    println!("{}", "  ╠══════════════════════════════════════════╣".color(cyan));
-    println!("  ║  {} {:<31} ║", "Hash:".color(yellow), hash_type.bold());
-    println!("  ║  {} {:<31} ║", "Mode:".color(yellow), mode_desc);
-    println!("  ║  {} {:<31} ║", "Target:".color(yellow), hash_info);
-    if num_targets > 1 {
-        println!("  ║  {} {:<31} ║", "Targets:".color(yellow), format!("{} hashes", num_targets));
-    }
-    if let Some(salt) = salt_display {
-        println!("  ║  {} {:<31} ║", "Salt:".color(yellow), salt);
-    }
-    println!("  ║  {} {:<31} ║", "Space:".color(yellow), format!("{} passwords", num_passwords));
-    println!("{}", "  ╚══════════════════════════════════════════╝".color(cyan));
-}

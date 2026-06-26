@@ -45,10 +45,6 @@ fn main() {
     // --- Session init
     app.init_session();
 
-    if !app.args.quiet && !app.args.json {
-        ui::print_banner();
-    }
-
     let is_auto = app.args.hash_type == "auto" || app.args.hash.is_some() || app.args.hashlist.is_some();
 
     // --- Parse hashes
@@ -140,64 +136,48 @@ fn main() {
     // --- Salt setup
     app.setup_salt();
 
-    let mode_desc = match &app.attack_mode {
-        AttackMode::BruteForce { password_len } => {
-            if app.args.mode == "incremental" {
-                format!("incremental (starting len {})", password_len)
-            } else { format!("brute force (len {})", password_len) }
-        }
-        AttackMode::Mask { .. } => format!("mask ({} candidates)", app.num_passwords),
-        AttackMode::Wordlist { words } => format!("wordlist ({} words)", words.len()),
-        AttackMode::Hybrid { words, suffix, .. } => format!("hybrid {}({} words × mask)", if *suffix { "suffix " } else { "prefix " }, words.len()),
-        AttackMode::Prince { dict } => format!("prince ({} words, {} chains)", dict.len(), app.num_passwords),
-    };
-
-    let salt_display = if app.entries[0].salt_len > 0 {
-        let salt_bytes = &app.entries[0].salt;
-        let mut s = String::new();
-        for i in (0..app.entries[0].salt_len as usize).rev() {
-            let c = char::from_u32(salt_bytes[i]).unwrap_or('?');
-            if c != '\0' { s.push(c); }
-        }
-        s
-    } else {
-        app.args.salt.clone()
-    };
-
-    if !app.args.quiet && !app.args.json {
-        let password = app.args.password.clone().unwrap_or_else(|| "abc".to_string());
-        let hash_info = if is_auto && app.args.hashlist.is_none() {
-            app.entries[0].hex.clone()
-        } else { password };
-        ui::print_config(
-            app.hash_type.name(), &mode_desc, &hash_info,
-            if salt_display.is_empty() { None } else { Some(salt_display.as_str()) },
-            app.num_passwords as u64, app.entries.len(),
-        );
-    }
-
     // --- Delegate to attack module
     if app.entries.is_empty() {
         eprintln!("No hashes to crack");
         return;
     }
-    app::attack::run_gpu_attack(
-        app.hash_type,
-        app.attack_mode.clone(),
-        &app.entries,
-        app.salt,
-        app.salt_len,
-        app.num_passwords,
-        &mut app.potfile,
-        &mut app.active_session,
-        app.args.session.clone(),
-        &app.args,
-        app.hash_type.name(),
-        &app.entries[0],
-        app.args.quiet,
-        app.args.json,
-        app.args.verbose,
-        &app.args.mode,
-        app.args.hex,
-    );
+
+    if app.args.quiet || app.args.json {
+        app::attack::run_gpu_attack(
+            app.hash_type,
+            app.attack_mode.clone(),
+            &app.entries,
+            app.salt,
+            app.salt_len,
+            app.num_passwords,
+            &mut app.potfile,
+            &mut app.active_session,
+            app.args.session.clone(),
+            &app.args,
+            app.hash_type.name(),
+            &app.entries[0],
+            app.args.quiet,
+            app.args.json,
+            app.args.verbose,
+            &app.args.mode,
+            app.args.hex,
+        );
+    } else {
+        // TUI dashboard
+        cli::tui::run_crack_tui(
+            app.hash_type,
+            app.attack_mode.clone(),
+            app.entries.clone(),
+            app.salt,
+            app.salt_len,
+            app.num_passwords,
+            std::mem::take(&mut app.potfile),
+            std::mem::take(&mut app.active_session),
+            app.args.session.clone(),
+            app.args.clone(),
+            app.hash_type.name(),
+            app.entries[0].clone(),
+            app.args.hex,
+        );
+    }
 }
