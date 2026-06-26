@@ -1,0 +1,165 @@
+.TH HASHCKACKER 1 "June 2026" "hashcracker 0.1" "User Commands"
+.SH NAME
+hashcracker \- GPU\-accelerated password cracker
+.SH SYNOPSIS
+.B hashcracker
+[\fIOPTIONS\fR] [\fIPASSWORD\fR]
+.SH DESCRIPTION
+hashcracker is a GPU\-accelerated password cracker supporting 41 hash types.
+It runs on Vulkan, Metal, and DirectX 12 via wgpu, requiring no CUDA or OpenCL
+driver installation. Targets can be specified as raw hex hashes, prefixed
+formats (e.g. \(la$1$salt$hash\(ra), or hashlist files.
+.SH OPTIONS
+.SS Attack Configuration
+.TP
+.B \-m, \-\-mode \fIMODE\fR
+Attack mode: brute, wordlist, mask, hybrid, prince, single, markov, incremental
+(default: brute).
+.TP
+.B \-\-hash\-type \fITYPE\fR
+Hash type (default: auto). See list of 41 supported types below.
+.TP
+.B \-w, \-\-wordlist \fIFILE\fR
+Wordlist file path.
+.TP
+.B \-\-mask \fIPATTERN\fR
+Mask pattern. Characters: ?l (lower), ?u (upper), ?d (digit), ?a (all).
+.TP
+.B \-\-prefix
+Prepend word to mask result (default is suffix).
+.TP
+.B \-\-salt \fISALT\fR
+Static salt for hash computation.
+.TP
+.B \-\-rules \fIFILE\fR
+Rules file (hashcat\-compatible .rule syntax).
+.TP
+.B \-\-rules\-stack \fIFILE\fR
+Stacked rules files applied sequentially (repeatable).
+.TP
+.B \-\-filter \fIFILTER\fR
+Filter constraints: min=X, max=X, chars=abc (repeatable).
+.SS Target Specification
+.TP
+.B \-\-hash \fIHASH\fR
+Single target hash (hex string or prefixed format).
+.TP
+.B \-\-hashlist \fIFILE\fR
+Hashlist file (one hash per line, supports user:hash format).
+.SS Attack Modes
+.TP
+.B \-\-prince\-dict \fIFILE\fR
+Prince mode dictionary file for word\-concatenation chains.
+.TP
+.B \-\-loopback
+Use potfile cracked passwords as wordlist input.
+.TP
+.B \-\-stdout
+Generate candidate passwords to stdout (no cracking).
+.SS Session and Persistence
+.TP
+.B \-\-session \fINAME\fR
+Session name for save/resume.
+.TP
+.B \-\-potfile \fIFILE\fR
+Custom potfile path (default: ~/.hashcracker/potfile).
+.SS Display Modes
+.TP
+.B \-\-show
+Show cracked passwords from potfile.
+.TP
+.B \-\-left
+Show remaining (uncracked) hashes.
+.TP
+.B \-\-quiet
+Only output cracked passwords, suppress progress and banner.
+.TP
+.B \-\-verbose
+Show detailed per\-event GPU stats.
+.TP
+.B \-\-hex
+Output cracked password as hex\-encoded string.
+.TP
+.B \-\-json
+Machine\-readable JSON\-line output per event.
+.SS Utility
+.TP
+.B \-\-bench
+Benchmark all supported hash types.
+.TP
+.B \-\-extract \ITYPE\fR
+Extract hash from file. Supported: pdf, zip.
+.TP
+.B \-h, \-\-help
+Print help.
+.TP
+.B \-V, \-\-version
+Print version.
+.SS Hash Type Aliases
+.TP
+.B md5, sha1, sha256, sha512, sha224, sha384
+Standard hash algorithms.
+.TP
+.B md4, ntlm, lm
+Windows hash types.
+.TP
+.B md5crypt, sha256crypt, sha512crypt
+Unix crypt(3) formats.
+.TP
+.B bcrypt, apr1, phpass, drupal7
+Web application hash types.
+.TP
+.B mysql41, mssql05, mssql12, postgresql, db2
+Database password hashes.
+.TP
+.B salted\-sha1, salted\-sha256, salted\-sha512
+Salted hash formats.
+.TP
+.B pbkdf2\-sha256, hmac\-sha1, hmac\-sha256, hmac\-sha512
+Key derivation and MAC formats.
+.TP
+.B sha256d, sha512d
+Double\-hash formats (Bitcoin).
+.TP
+.B ntlmv2, dcc, dcc2
+Windows domain cache formats.
+.TP
+.B crc32, grub2
+Checksum and bootloader formats.
+.TP
+.B pdf, wpa, pkzip, keepass, 7z, rar5
+Encrypted document and archive formats.
+.SH EXAMPLES
+.TP
+Crack raw MD5:
+hashcracker \-\-hash e99a18c428cb38d5f260853678922e03
+.TP
+Wordlist \+ rules:
+hashcracker \-\-hashlist hashes.txt \-\-wordlist rockyou.txt \-\-rules best64.rule
+.TP
+Mask attack:
+hashcracker \-\-hash e99a18c428cb38d5f260853678922e03 \-\-mode mask \-\-mask '?l?l?d?d?d'
+.TP
+PRINCE mode:
+hashcracker \-\-hash '$6$salt$hash' \-\-mode prince \-\-prince\-dict words.txt
+.TP
+Benchmark:
+hashcracker \-\-bench
+.TP
+Extract and crack:
+hashcracker \-\-extract pdf document.pdf \-\-wordlist rockyou.txt
+.SH EXIT STATUS
+.TP
+0
+Successful program execution (at least one hash cracked, or no error).
+.TP
+1
+An error occurred (invalid hash, file not found, unsupported mode).
+.SH FILES
+.TP
+~/.hashcracker/potfile
+Default potfile storing cracked passwords.
+.SH BUGS
+Report bugs at https://github.com/anomalyco/hashcracker/issues
+.SH AUTHORS
+anomalyco
