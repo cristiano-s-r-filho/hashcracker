@@ -14,40 +14,35 @@ mod markov;
 
 use clap::Parser;
 
-use hash_backend::AttackMode;
+use hash_backend::{AttackMode, HashType};
+use cli::HashEntry;
 
 #[allow(unused_assignments)]
 fn main() {
     let args = cli::Args::parse();
 
-    // --- Mode: benchmark
     if args.bench {
         app::benchmark::run_benchmark(args.verbose);
         return;
     }
 
-    // --- Mode: extraction
     if let Some(ref extract_type) = args.extract {
         app::extraction::handle_extraction(&args, extract_type);
         return;
     }
 
-    // --- Build app state
     let mut app = app::App::new(args);
 
-    // --- Handle --show and --left
     if app.args.show || app.args.left {
         if app.args.left { app.run_left(); }
         if app.args.show { app.run_show(); }
         return;
     }
 
-    // --- Session init
     app.init_session();
 
     let is_auto = app.args.hash_type == "auto" || app.args.hash.is_some() || app.args.hashlist.is_some();
 
-    // --- Parse hashes
     app.collect_entries();
 
     if app.args.verbose {
@@ -57,17 +52,14 @@ fn main() {
         }
     }
 
-    // --- Attack mode parsing
     app.parse_attack_mode();
 
-    // --- stdout mode
     if app.args.stdout {
         let filters = filter::parse_filters(&app.args.filter);
         app::stdout::run_stdout(&app.attack_mode, app.num_passwords, &filters);
         return;
     }
 
-    // --- Prince mode: CPU-only
     if let AttackMode::Prince { .. } = &app.attack_mode {
         let prince_entries: Vec<(String, Vec<u8>)> = app.entries.iter()
             .map(|e| {
@@ -80,7 +72,6 @@ fn main() {
         return;
     }
 
-    // --- Single crack mode
     if app.args.mode == "single" {
         let single_entries: Vec<(String, Option<String>, Vec<u8>)> = app.entries.iter()
             .map(|e| {
@@ -105,7 +96,6 @@ fn main() {
         return;
     }
 
-    // --- Markov mode
     if app.args.mode == "markov" {
         let path = app.args.wordlist.clone().unwrap_or_else(|| {
             eprintln!("Markov mode requires --wordlist <training_file>");
@@ -133,16 +123,51 @@ fn main() {
         return;
     }
 
-    // --- Salt setup
     app.setup_salt();
 
-    // --- Delegate to attack module
     if app.entries.is_empty() {
         eprintln!("No hashes to crack");
         return;
     }
 
-    if app.args.quiet || app.args.json {
+    if app.args.demo {
+        app.hash_type = HashType::Md5;
+        let demo_words: Vec<String> = ui::embedded_test::DEMO_WORDLIST.iter().map(|s| s.to_string()).collect();
+        app.attack_mode = AttackMode::Wordlist { words: demo_words.clone() };
+        app.num_passwords = demo_words.len() as u32;
+        let demo_hexes = ui::embedded_test::build_demo_hashset(ui::embedded_test::DEMO_HASHES_MD5);
+        app.entries = demo_hexes.iter().map(|h| {
+            let parsed = app.hash_type.module().parse_hash_string(h).expect("demo hash is valid");
+            HashEntry {
+                hex: h.clone(),
+                hash: parsed.hash_words,
+                hash_extra: parsed.extra_words,
+                salt: [0u32; 16],
+                salt_len: 0,
+                username: None,
+            }
+        }).collect();
+        app.salt = [0u32; 16];
+        app.salt_len = 0;
+    }
+
+    let is_tui = !app.args.quiet && !app.args.json;
+    if is_tui {
+        ui::run_tui(
+            app.hash_type,
+            app.attack_mode.clone(),
+            app.entries.clone(),
+            app.salt,
+            app.salt_len,
+            app.num_passwords,
+            std::mem::take(&mut app.potfile),
+            std::mem::take(&mut app.active_session),
+            app.args.clone(),
+            app.hash_type.name(),
+            app.entries[0].clone(),
+            app.args.hex,
+        );
+    } else {
         app::attack::run_gpu_attack(
             app.hash_type,
             app.attack_mode.clone(),
@@ -160,23 +185,6 @@ fn main() {
             app.args.json,
             app.args.verbose,
             &app.args.mode,
-            app.args.hex,
-        );
-    } else {
-        // TUI dashboard
-        cli::tui::run_crack_tui(
-            app.hash_type,
-            app.attack_mode.clone(),
-            app.entries.clone(),
-            app.salt,
-            app.salt_len,
-            app.num_passwords,
-            std::mem::take(&mut app.potfile),
-            std::mem::take(&mut app.active_session),
-            app.args.session.clone(),
-            app.args.clone(),
-            app.hash_type.name(),
-            app.entries[0].clone(),
             app.args.hex,
         );
     }

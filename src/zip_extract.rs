@@ -1,5 +1,3 @@
-// ZIP hash extraction — compatible with hashcat -m 17200/17210
-// Produces $pkzip$ format hash strings (replacement for zip2john)
 
 pub struct ZipEncryptedEntry {
     pub filename: String,
@@ -41,7 +39,6 @@ fn format_pkzip_hash(entry: &ZipEncryptedEntry) -> String {
 
     let data_len = entry.encrypted_data.len();
 
-    // Last 12 bytes are the verification/magic bytes
     let magic_start = if data_len >= 12 { data_len - 12 } else { 0 };
     let main_data = &entry.encrypted_data[..magic_start];
     let magic_bytes = &entry.encrypted_data[magic_start..];
@@ -57,12 +54,10 @@ fn format_pkzip_hash(entry: &ZipEncryptedEntry) -> String {
 }
 
 fn find_eocd(data: &[u8]) -> Result<usize, String> {
-    // EOCD signature: PK\x05\x06 (0x06054b50)
     let min_eocd = 22;
     if data.len() < min_eocd {
         return Err("File too small to be a valid ZIP archive".to_string());
     }
-    // EOCD is near the end (within the last 65557 + 22 bytes)
     let search_start = if data.len() > 65557 + min_eocd {
         data.len() - 65557 - min_eocd
     } else {
@@ -79,7 +74,6 @@ fn find_eocd(data: &[u8]) -> Result<usize, String> {
 fn find_encrypted_entries(data: &[u8]) -> Result<Vec<ZipEncryptedEntry>, String> {
     let eocd_pos = find_eocd(data)?;
 
-    // Parse EOCD
     let cd_offset = u32::from_le_bytes(
         data[eocd_pos + 16..eocd_pos + 20]
             .try_into()
@@ -102,7 +96,6 @@ fn find_encrypted_entries(data: &[u8]) -> Result<Vec<ZipEncryptedEntry>, String>
         if pos + 46 > data.len() {
             break;
         }
-        // Verify central directory header signature
         if &data[pos..pos + 4] != b"PK\x01\x02" {
             break;
         }
@@ -133,16 +126,13 @@ fn find_encrypted_entries(data: &[u8]) -> Result<Vec<ZipEncryptedEntry>, String>
         if !is_encrypted || is_strong || is_directory {
             continue;
         }
-        // Skip entries with zero CRC
         if crc32 == 0 {
             continue;
         }
-        // Skip entries with zero compressed size (data descriptor was used)
         if comp_size == 0 {
             continue;
         }
 
-        // Read encrypted data from local file header
         let encrypted_data =
             if local_offset + 30 < data.len() && &data[local_offset..local_offset + 4] == b"PK\x03\x04"
             {
@@ -184,8 +174,6 @@ fn find_encrypted_entries(data: &[u8]) -> Result<Vec<ZipEncryptedEntry>, String>
     Ok(entries)
 }
 
-// ── PKZIP stream cipher for CPU verification ──────────────────────────────
-
 fn make_crc32_table() -> [u32; 256] {
     let mut table = [0u32; 256];
     for i in 0..256u32 {
@@ -224,7 +212,6 @@ fn pkzip_decrypt_byte(key0: &mut u32, key1: &mut u32, key2: &mut u32, ciphertext
     let decrypt_byte = (((temp.wrapping_mul(temp ^ 1)) >> 8) & 0xFF) as u8;
     let plaintext = ciphertext ^ decrypt_byte;
 
-    // Update keys with ciphertext (same as encrypt path, keeps keys in sync)
     let c = ciphertext as u32;
     *key0 = CRC32_TABLE[((*key0 ^ c) & 0xFF) as usize] ^ (*key0 >> 8);
     *key1 = (key1.wrapping_add(*key0 & 0xFF)).wrapping_mul(0x08088405).wrapping_add(1);
@@ -233,8 +220,6 @@ fn pkzip_decrypt_byte(key0: &mut u32, key1: &mut u32, key2: &mut u32, ciphertext
     plaintext
 }
 
-/// Decrypt pkzip-encrypted data using the given password.
-/// Returns the decrypted bytes.
 pub fn pkzip_decrypt(password: &str, data: &[u8]) -> Vec<u8> {
     let (mut key0, mut key1, mut key2) = pkzip_update_keys(password);
     let mut result = data.to_vec();
@@ -244,12 +229,6 @@ pub fn pkzip_decrypt(password: &str, data: &[u8]) -> Vec<u8> {
     result
 }
 
-/// Verify a password against pkzip hash parameters.
-///
-/// The check: decrypt the first 12 bytes of the encrypted data.
-/// Bytes [10] and [11] of the decrypted header should be equal
-/// (they are the MSB of the CRC, stored twice as the PKZIP check).
-/// Also verify they match the high byte of the stored CRC.
 pub fn pkzip_verify(password: &str, crc32: u32, data: &[u8]) -> bool {
     if data.len() < 12 {
         return false;
@@ -260,12 +239,10 @@ pub fn pkzip_verify(password: &str, crc32: u32, data: &[u8]) -> bool {
         return false;
     }
 
-    // PKZIP check: bytes [10] and [11] of decrypted header should be equal
     if decrypted[10] != decrypted[11] {
         return false;
     }
 
-    // And they should match the high byte of the CRC
     let crc_high = ((crc32 >> 24) & 0xFF) as u8;
     decrypted[10] == crc_high
 }
@@ -276,11 +253,9 @@ mod tests {
 
     #[test]
     fn test_pkzip_cipher_roundtrip() {
-        // PKZIP stream cipher self-test
         let password = "test";
-        let plaintext = b"Hello World!!!!!!"; // >= 12 bytes for check header
+        let plaintext = b"Hello World!!!!!!";
 
-        // Encrypt: initialize keys with password, then XOR encrypt
         let mut key0: u32 = 0x12345678;
         let mut key1: u32 = 0x23456789;
         let mut key2: u32 = 0x34567890;
@@ -304,26 +279,22 @@ mod tests {
             key2 = CRC32_TABLE[((key2 ^ (key1 >> 24)) & 0xFF) as usize] ^ (key2 >> 8);
         }
 
-        // Decrypt
         let decrypted = pkzip_decrypt(password, &encrypted);
         assert_eq!(decrypted, plaintext);
     }
 
     #[test]
     fn test_pkzip_verify() {
-        // Create 12 check bytes with proper CRC high byte
         let crc32: u32 = 0x12345678;
         let crc_high = ((crc32 >> 24) & 0xFF) as u8;
 
         let mut check_bytes = [0u8; 12];
-        // Fill first 10 with random-ish bytes
         for i in 0..10 {
             check_bytes[i] = (i * 7 + 3) as u8;
         }
         check_bytes[10] = crc_high;
         check_bytes[11] = crc_high;
 
-        // "Encrypt" with password "test"
         let password = "test";
         let mut key0: u32 = 0x12345678;
         let mut key1: u32 = 0x23456789;

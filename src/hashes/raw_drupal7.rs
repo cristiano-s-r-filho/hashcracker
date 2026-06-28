@@ -160,7 +160,6 @@ impl HashModule for RawDrupal7 {
 
         let mut target = [0u32; 8];
         let mut extra = [0u32; 8];
-        // 40 bytes = 5 u64 words (big-endian)
         for i in 0..5 {
             let word = u64::from_be_bytes(hash_bytes[i * 8..i * 8 + 8].try_into().unwrap());
             target[i] = word as u32;

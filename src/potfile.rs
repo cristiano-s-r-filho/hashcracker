@@ -12,8 +12,8 @@ static DEFAULT_POTFILE: LazyLock<PathBuf> = LazyLock::new(|| {
 #[derive(Debug, Clone)]
 pub struct Potfile {
     path: PathBuf,
-    entries: Vec<(String, String)>, // (hash, password)
-    cracked: HashSet<String>,       // set of hash strings already cracked
+    entries: Vec<(String, String)>,
+    cracked: HashSet<String>,
 }
 
 impl Potfile {

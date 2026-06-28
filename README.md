@@ -1,18 +1,18 @@
 # hashcracker
 
-GPU-accelerated password cracker — 41 hash types, single binary, runs everywhere (Vulkan/Metal/DX12).
+GPU-accelerated password cracker — 42 hash types, single binary, runs everywhere (Vulkan/Metal/DX12).
 
 ```text
   ╔══════════════════════════════════════════════════════╗
   ║                   hashcracker  v0.1                  ║
   ║        GPU-Accelerated Password Cracking             ║
-  ║    41 hash types · Vulkan/Metal/DX12 · Single Binary ║
+  ║    42 hash types · Vulkan/Metal/DX12 · Single Binary ║
   ╚══════════════════════════════════════════════════════╝
 ```
 
 ## Features
 
-- **41 hash types**: raw MD5/SHA-1/SHA-256/SHA-512, NTLM, bcrypt, md5crypt, sha256crypt, sha512crypt, phpass, KeePass, 7-Zip, RAR5, PBKDF2, HMAC variants, and more
+- **42 hash types**: raw MD5/SHA-1/SHA-256/SHA-512, NTLM, bcrypt, md5crypt, sha256crypt, sha512crypt, phpass, KeePass, 7-Zip, RAR5, PBKDF2, HMAC variants, and more
 - **GPU-accelerated**: 24 types with Vulkan compute shaders (wgpu) — auto-detects your GPU
 - **CPU-only**: 17 types fall back to CPU wordlist mode — no kernel driver needed
 - **Auto-detect**: hash type detected from format prefix (`$1$`, `$6$`, `$keepass$`, etc.) or hex length
@@ -31,19 +31,6 @@ GPU-accelerated password cracker — 41 hash types, single binary, runs everywhe
 
 ```bash
 cargo install hashcracker
-```
-
-### Homebrew
-
-```bash
-brew install anomalyco/tap/hashcracker
-```
-
-### Scoop
-
-```powershell
-scoop bucket add hashcracker https://github.com/anomalyco/scoop-hashcracker
-scoop install hashcracker
 ```
 
 ### Pre-built binaries
@@ -85,7 +72,7 @@ hashcracker --show
 hashcracker --hashlist hashes.txt --wordlist rockyou.txt --json
 ```
 
-## Supported Hash Types (41)
+## Supported Hash Types (42)
 
 | # | Type | Hashcat mode | GPU | 
 |---|------|-------------|-----|

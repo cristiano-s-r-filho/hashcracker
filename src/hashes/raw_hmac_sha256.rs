@@ -80,7 +80,6 @@ mod tests {
 
     #[test]
     fn test_hmac_sha256_rfc4231_case2() {
-        // RFC 4231 Test Case 2: key="Jefe", data="what do ya want for nothing?"
         let result = hmac_sha256(b"Jefe", b"what do ya want for nothing?");
         let expected = hex::decode("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843").unwrap();
         assert_eq!(result.to_vec(), expected);
@@ -88,7 +87,6 @@ mod tests {
 
     #[test]
     fn test_hmac_sha256_rfc4231_case3() {
-        // RFC 4231 Test Case 3: key=20 bytes of 0xaa, data=50 bytes of 0xdd
         let key = [0xaa; 20];
         let data = [0xdd; 50];
         let result = hmac_sha256(&key, &data);

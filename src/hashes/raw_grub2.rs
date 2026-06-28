@@ -36,7 +36,6 @@ impl HashModule for RawGrub2 {
     fn needs_int64(&self) -> bool { true }
 
     fn cpu_verify(&self, password: &str, salt: &[u8], hash: &[u32]) -> bool {
-        // Parse salt as: iterations (be u32) || salt_bytes
         if salt.len() < 5 { return false; }
         let mut iter_bytes = [0u8; 4];
         iter_bytes.copy_from_slice(&salt[..4]);
@@ -71,7 +70,6 @@ impl HashModule for RawGrub2 {
     }
 
     fn parse_hash_string(&self, s: &str) -> Result<ParsedHash, String> {
-        // $grub$pbkdf2-sha512$iterations.salt$hash
         let parts: Vec<&str> = s.split('$').collect();
         if parts.len() < 5 {
             return Err("GRUB2 hash requires format: $grub$pbkdf2-sha512$iter.salt$hash_hex".to_string());
@@ -100,7 +98,6 @@ impl HashModule for RawGrub2 {
                 .map_err(|_| "invalid hex".to_string())?;
         }
 
-        // Prepend iterations to salt for cpu_verify
         let mut full_salt = Vec::with_capacity(4 + salt_bytes.len());
         full_salt.extend_from_slice(&iterations.to_be_bytes());
         full_salt.extend_from_slice(&salt_bytes);

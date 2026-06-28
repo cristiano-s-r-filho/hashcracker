@@ -80,7 +80,6 @@ mod tests {
 
     #[test]
     fn test_hmac_sha1_rfc2202_case2() {
-        // RFC 2202 Test Case 2: key="Jefe", data="what do ya want for nothing?"
         let result = hmac_sha1(b"Jefe", b"what do ya want for nothing?");
         let expected = hex::decode("effcdf6ae5eb2fa2d27416d5f184df9c259a7c79").unwrap();
         assert_eq!(result.to_vec(), expected);
@@ -88,7 +87,6 @@ mod tests {
 
     #[test]
     fn test_hmac_sha1_rfc2202_case3() {
-        // RFC 2202 Test Case 3: key=20 bytes of 0xaa, data=50 bytes of 0xdd
         let key = [0xaa; 20];
         let data = [0xdd; 50];
         let result = hmac_sha1(&key, &data);

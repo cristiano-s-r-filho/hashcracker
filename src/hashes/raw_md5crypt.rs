@@ -11,7 +11,6 @@ impl HashModule for RawMd5Crypt {
     fn cpu_verify(&self, password: &str, salt: &[u8], hash: &[u32]) -> bool {
         let salt_str = std::str::from_utf8(salt).unwrap_or("");
         let full_hash = md5crypt(password, salt_str);
-        // Parse the hash to compare raw words
         if let Ok(parsed) = self.parse_hash_string(&full_hash) {
             parsed.hash_words[..4] == hash[..4]
         } else {
@@ -83,9 +82,6 @@ fn decode_md5crypt_hash(encoded: &str) -> Result<[u8; 16], String> {
     }).collect();
     let v = v?;
 
-    // 5 groups of 4 chars each = 20 chars => 15 bytes
-    // 1 group of 2 chars => 1 byte
-    // Total: 22 chars -> 16 bytes
     let mut out = [0u8; 16];
 
     for i in 0..5 {
@@ -103,7 +99,6 @@ fn decode_md5crypt_hash(encoded: &str) -> Result<[u8; 16], String> {
         }
     }
 
-    // Last 2 chars produce byte 11
     let a = v[20] as u32;
     let b = v[21] as u32;
     out[11] = (a | (b << 6)) as u8;
@@ -124,7 +119,6 @@ pub fn encode_md5crypt_hash(hash: &[u8; 16]) -> String {
         out[i * 4 + 3] = B64[((value >> 18) & 0x3F) as usize];
     }
 
-    // Last group: byte 11 -> 2 chars
     let value = hash[11] as u32;
     out[20] = B64[(value & 0x3F) as usize];
     out[21] = B64[((value >> 6) & 0x3F) as usize];
@@ -138,20 +132,17 @@ pub fn md5crypt(password: &str, salt: &str) -> String {
     let pwd = password.as_bytes();
     let salt_bytes = salt.as_bytes();
 
-    // Step 1: digest_a = MD5(password + "$1$" + salt)
     let mut a_ctx = Md5::new();
     a_ctx.update(pwd);
     a_ctx.update(b"$1$");
     a_ctx.update(salt_bytes);
 
-    // Step 2: digest_b = MD5(password + salt + password)
     let mut b_ctx = Md5::new();
     b_ctx.update(pwd);
     b_ctx.update(salt_bytes);
     b_ctx.update(pwd);
     let digest_b = b_ctx.finalize();
 
-    // Step 3: Append digest_b bytes interleaved by password length
     let mut j = 0;
     while j < pwd.len() {
         let n = std::cmp::min(pwd.len() - j, 16);
@@ -159,7 +150,6 @@ pub fn md5crypt(password: &str, salt: &str) -> String {
         j += 16;
     }
 
-    // Step 4: Process each bit of password length
     let mut n = pwd.len();
     while n > 0 {
         if (n & 1) != 0 {
@@ -170,11 +160,9 @@ pub fn md5crypt(password: &str, salt: &str) -> String {
         n >>= 1;
     }
 
-    // Step 5: Finalize initial digest
     let mut digest = [0u8; 16];
     digest.copy_from_slice(&a_ctx.finalize());
 
-    // Step 6: 1000 rounds
     for i in 0..1000 {
         let mut ctx = Md5::new();
         if (i & 1) != 0 {
@@ -197,13 +185,11 @@ pub fn md5crypt(password: &str, salt: &str) -> String {
         digest.copy_from_slice(&result);
     }
 
-    // Step 7: Encode
     format!("$1${}${}", salt, encode_md5crypt_hash(&digest))
 }
 
 #[test]
 fn test_md5crypt_hunter2() {
-    // From md5crypt crate test vector
     let hash = md5crypt("hunter2", "1234abcd");
     assert_eq!(hash, "$1$1234abcd$k941IFPqhCBpKvhOnZqRd/");
 }

@@ -42,7 +42,6 @@ impl HashModule for RawSha256Crypt {
             return Err("Expected $5$ prefix for sha256crypt".to_string());
         }
         let rest = &s[3..];
-        // Parse optional rounds=N specification
         let rest = if rest.starts_with("rounds=") {
             let rest2 = &rest[7..];
             if let Some(dollar_pos) = rest2.find('$') {
@@ -125,7 +124,6 @@ fn decode_sha256crypt_hash(encoded: &str) -> Result<[u8; 32], String> {
         out[b0] = (w & 0xFF) as u8;
     }
 
-    // Last group: 3 chars -> 2 bytes (indices 31, 30)
     let a = v[40] as u32;
     let b = v[41] as u32;
     let c = v[42] as u32;
@@ -139,7 +137,6 @@ fn decode_sha256crypt_hash(encoded: &str) -> Result<[u8; 32], String> {
 fn encode_sha256crypt_hash(hash: &[u8; 32]) -> String {
     let mut out = [0u8; 43];
 
-    // 10 groups of 3 bytes -> 4 chars each
     let groups: [(usize, usize, usize); 10] = [
         (0, 10, 20),
         (21, 1, 11),
@@ -162,7 +159,6 @@ fn encode_sha256crypt_hash(hash: &[u8; 32]) -> String {
         }
     }
 
-    // Last group: (0, 31, 30, 3) where 0 is literal zero
     let w = (hash[31] as u32) << 8 | (hash[30] as u32);
     for j in 0..3 {
         out[pos] = B64[((w >> (j * 6)) & 0x3F) as usize];
@@ -206,19 +202,16 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
     let salt_bytes = salt_actual.as_bytes();
     let salt_len = salt_bytes.len();
 
-    // Step 1-5: digest_a streaming context = SHA256(password + salt)
     let mut ctx = Sha256::new();
     ctx.update(pwd);
     ctx.update(salt_bytes);
 
-    // Step 2-8: digest_b = SHA256(password + salt + password)
     let mut alt_ctx = Sha256::new();
     alt_ctx.update(pwd);
     alt_ctx.update(salt_bytes);
     alt_ctx.update(pwd);
     let digest_b = alt_ctx.finalize_reset();
 
-    // Step 9: Extend digest_a with digest_b bytes
     let mut remaining = pwd_len;
     while remaining > 32 {
         ctx.update(&digest_b);
@@ -226,7 +219,6 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
     }
     ctx.update(&digest_b[..remaining]);
 
-    // Step 11: Bit processing
     remaining = pwd_len;
     while remaining > 0 {
         if (remaining & 1) != 0 {
@@ -237,18 +229,15 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
         remaining >>= 1;
     }
 
-    // Step 12: Finish digest_a
     let mut alt_result = [0u8; 32];
     alt_result.copy_from_slice(&ctx.finalize_reset());
 
-    // Step 13-15: digest_dp = SHA256(password repeated pwd_len times)
     alt_ctx.reset();
     for _ in 0..pwd_len {
         alt_ctx.update(pwd);
     }
     let temp_result = alt_ctx.finalize_reset();
 
-    // Step 16: P = temp_result repeated to pwd_len bytes
     let mut p = Vec::with_capacity(pwd_len);
     while p.len() < pwd_len {
         let remaining = pwd_len - p.len();
@@ -256,14 +245,12 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
         p.extend_from_slice(&temp_result[..n]);
     }
 
-    // Step 17-18: digest_ds = SHA256(salt repeated (16 + alt_result[0]) times)
     let repeat_count = 16usize + alt_result[0] as usize;
     for _ in 0..repeat_count {
         alt_ctx.update(salt_bytes);
     }
     let temp_result = alt_ctx.finalize_reset();
 
-    // Step 19-20: S = temp_result repeated to salt_len bytes
     let mut s = Vec::with_capacity(salt_len);
     while s.len() < salt_len {
         let remaining = salt_len - s.len();
@@ -271,7 +258,6 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
         s.extend_from_slice(&temp_result[..n]);
     }
 
-    // Step 21: Iteration loop
     for cnt in 0..rounds {
         let mut ctx = Sha256::new();
 
@@ -298,7 +284,6 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
         alt_result.copy_from_slice(&ctx.finalize_reset());
     }
 
-    // Step 22: Encode
     let encoded = encode_sha256crypt_hash(&alt_result);
     let mut result = String::from("$5$");
     if rounds_custom {
@@ -310,8 +295,6 @@ pub fn sha256crypt(password: &str, full_salt: &str) -> String {
     result
 }
 
-/// Decode the 43-char base64 hash part back to raw bytes
-/// Used for extracting the target hash from a $5$ string
 #[allow(dead_code)]
 pub fn decode_hash_to_words(encoded: &str) -> Result<[u32; 8], String> {
     let bytes = decode_sha256crypt_hash(encoded)?;
@@ -324,7 +307,6 @@ pub fn decode_hash_to_words(encoded: &str) -> Result<[u32; 8], String> {
 
 #[test]
 fn test_sha256crypt_hello_world() {
-    // From Drepper SHA-crypt spec
     let hash = sha256crypt("Hello world!", "$5$saltstring");
     assert_eq!(hash, "$5$saltstring$5B8vYYiY.CVt1RlTTf8KbXBH3hsxY/GNooZaBBGWEc5");
 }
@@ -371,14 +353,12 @@ fn test_sha256crypt_debug_intermediate() {
     eprintln!("extended digest_a (step12): {:02x?}", extended.as_slice());
     eprintln!("alt_result[0] = {}", extended[0]);
 
-    // Compute P
     for _ in 0..pwd_len {
         alt_ctx.update(pwd);
     }
     let dp = alt_ctx.finalize_reset();
     eprintln!("DP digest: {:02x?}", dp.as_slice());
 
-    // Compute S with diff repeat_count
     let rc = 16 + extended[0] as usize;
     for _ in 0..rc {
         alt_ctx.update(salt);
@@ -425,7 +405,6 @@ fn test_sha256crypt_rounds_123456() {
 
 #[test]
 fn test_sha256crypt_rounds_too_low() {
-    // rounds=10 should be clamped to 1000
     let hash = sha256crypt("the minimum number is still observed", "$5$rounds=10$roundstoolow");
     assert_eq!(hash, "$5$rounds=1000$roundstoolow$yfvwcWrQ8l/K0DAWyuPMDNHpIVlTQebY9l/gL972bIC");
 }

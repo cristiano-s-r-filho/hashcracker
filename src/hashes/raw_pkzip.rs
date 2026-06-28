@@ -20,12 +20,6 @@ impl HashModule for RawPkzip {
     }
 
     fn cpu_verify(&self, password: &str, salt: &[u8], _hash: &[u32]) -> bool {
-        // Salt layout:
-        //   4 bytes: CRC32 (LE)
-        //   4 bytes: compressed_size (LE)
-        //   N bytes: encrypted data
-        //   M bytes: magic/check bytes
-        // hash is unused (we use direct verification via pkzip stream cipher)
         if salt.len() < 8 {
             return false;
         }
@@ -42,7 +36,7 @@ impl HashModule for RawPkzip {
     }
 
     fn shader_source(&self, _mode: &AttackModeType) -> &'static str {
-        "" // CPU-only for now
+        ""
     }
 
     fn detect_patterns(&self) -> &[HashPattern] {
@@ -54,7 +48,6 @@ impl HashModule for RawPkzip {
     }
 
     fn parse_hash_string(&self, s: &str) -> Result<ParsedHash, String> {
-        // Format: $pkzip$2*1*<mode>*0*<crc>*<comp_size>*<data_hex>*0*0*0*0*0*0*0*0*0*<magic_hex>*$/pkzip$
         let s = s.trim();
         let body = s
             .strip_prefix("$pkzip$")
@@ -62,7 +55,6 @@ impl HashModule for RawPkzip {
             .ok_or_else(|| "Missing $pkzip$...$/pkzip$ markers".to_string())?;
 
         let fields: Vec<&str> = body.split('*').collect();
-        // Minimum: version, type, mode, reserved, CRC, comp_size, data, zeros..., magic
         if fields.len() < 18 {
             return Err(format!(
                 "Expected at least 18 fields in pkzip hash, got {}",
@@ -83,7 +75,6 @@ impl HashModule for RawPkzip {
         let magic =
             hex::decode(magic_hex).map_err(|_| "Invalid magic bytes hex".to_string())?;
 
-        // Build salt: CRC32 (LE) + comp_size (LE) + data + magic
         let mut salt = Vec::with_capacity(8 + data.len() + magic.len());
         salt.extend_from_slice(&crc32.to_le_bytes());
         salt.extend_from_slice(&comp_size.to_le_bytes());
@@ -105,13 +96,11 @@ mod tests {
 
     #[test]
     fn test_parse_pkzip_hash() {
-        // Minimal valid pkzip hash string
         let hash_str = "$pkzip$2*1*1*0*12345*100*00112233445566778899aabbccddeeff*0*0*0*0*0*0*0*0*0*ffeeddccbbaa*$/pkzip$";
 
         let module = RawPkzip;
         let parsed = module.parse_hash_string(hash_str).unwrap();
 
-        // Verify salt layout
         assert_eq!(parsed.salt.len() >= 8, true);
         let crc = u32::from_le_bytes(parsed.salt[0..4].try_into().unwrap());
         let comp = u32::from_le_bytes(parsed.salt[4..8].try_into().unwrap());

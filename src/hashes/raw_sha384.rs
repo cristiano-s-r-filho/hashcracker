@@ -14,8 +14,6 @@ impl HashModule for RawSha384 {
         hasher.update(password.as_bytes());
         hasher.update(salt);
         let result = hasher.finalize();
-        // parse_hash_string stores target[i] = lo32, extra[i] = hi32 of each u64 word
-        // full_hash_slice builds: [lo0..lo5, 0, 0, hi0..hi3]
         for i in 0..6 {
             let word = u64::from_be_bytes(result[i * 8..i * 8 + 8].try_into().unwrap());
             if word as u32 != hash[i] { return false; }

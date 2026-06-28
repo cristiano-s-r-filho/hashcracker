@@ -1,7 +1,5 @@
 use owo_colors::{OwoColorize, Rgb};
 
-// ── JSON output events ──────────────────────────────────────────────
-
 #[derive(Debug, Clone)]
 pub enum OutputEvent {
     Found { hash: String, password: String, username: Option<String> },
@@ -35,8 +33,6 @@ pub fn emit_json(event: &OutputEvent) {
     }
 }
 
-// ── Found entry display ─────────────────────────────────────────────
-
 pub fn print_found_entry(hash: &str, password: &str, hex_mode: bool) {
     let display_pwd = if hex_mode { hex::encode(password.as_bytes()) } else { password.to_string() };
     let green = Rgb(0, 255, 100);
@@ -46,8 +42,6 @@ pub fn print_found_entry(hash: &str, password: &str, hex_mode: bool) {
         hash.color(white),
         display_pwd.color(green).bold());
 }
-
-// ── Summary table ──────────────────────────────────────────────────
 
 pub fn print_summary(results: &[(String, String, bool)], total_time: std::time::Duration, total_hashes: usize) {
     let green = Rgb(0, 255, 100);
@@ -91,8 +85,6 @@ pub fn print_summary(results: &[(String, String, bool)], total_time: std::time::
     println!("{}", "  └──────────────────────────────────────┘".color(cyan));
     println!();
 }
-
-// ── Benchmark display ───────────────────────────────────────────────
 
 pub fn print_bench_header(bench_duration: std::time::Duration) {
     let cyan = Rgb(0, 200, 255);
@@ -142,5 +134,4 @@ pub fn print_bench_footer(results: &[(&str, f64)]) {
     }
     println!("{}", "  ╚════════════════════════════════════════════╝".color(cyan));
 }
-
 

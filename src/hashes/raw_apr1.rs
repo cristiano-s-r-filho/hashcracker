@@ -190,7 +190,6 @@ pub fn apr1_hash(password: &str, salt: &str) -> String {
 
 #[test]
 fn test_apr1_openssl_vectors() {
-    // These vectors are verified against `openssl passwd -apr1`
     assert_eq!(apr1_hash("password", "saltsalt"), "$apr1$saltsalt$yAAkm4libquA.ZWLHbSBq/");
     assert_eq!(apr1_hash("hunter2", "1234abcd"), "$apr1$1234abcd$9CIaClZ4r0Ls0lioox8Vb1");
     assert_eq!(apr1_hash("hello", "8sFt66rZ"), "$apr1$8sFt66rZ$Y7XkHshZq90L3ql/CaLy50");

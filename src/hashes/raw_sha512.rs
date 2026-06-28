@@ -19,9 +19,6 @@ impl HashModule for RawSha512 {
             let word = u64::from_be_bytes(result[i * 8..i * 8 + 8].try_into().unwrap());
             let hi = (word >> 32) as u32;
             let lo = word as u32;
-            // parse_hash_string stores [hi, lo] interleaved per u64 word
-            // hash_words[0..8] = [H0, L0, H1, L1, H2, L2, H3, L3]
-            // extra_words[0..8] = [H4, L4, H5, L5, H6, L6, H7, L7]
             if i < 4 {
                 computed[i * 2] = hi;
                 computed[i * 2 + 1] = lo;

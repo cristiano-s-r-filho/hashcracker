@@ -71,8 +71,8 @@ impl HashModule for RawSha512Crypt {
         let mut extra = [0u32; 8];
         for i in 0..8 {
             let word = u64::from_be_bytes(hash_bytes[i * 8..i * 8 + 8].try_into().unwrap());
-            target[i] = word as u32;        // low 32 bits of BE u64
-            extra[i] = (word >> 32) as u32;  // high 32 bits of BE u64
+            target[i] = word as u32;
+            extra[i] = (word >> 32) as u32;
         }
 
         Ok(ParsedHash {
@@ -138,7 +138,6 @@ fn decode_sha512crypt_hash(encoded: &str) -> Result<[u8; 64], String> {
         out[b0] = (w & 0xFF) as u8;
     }
 
-    // Last group: 2 chars -> 1 byte (position 63)
     let a = v[84] as u32;
     let b = v[85] as u32;
     let w = a | (b << 6);
@@ -183,7 +182,6 @@ fn encode_sha512crypt_hash(hash: &[u8; 64]) -> String {
         }
     }
 
-    // Last group: byte 63 only -> 2 chars
     let w = hash[63] as u32;
     for j in 0..2 {
         out[pos] = B64[((w >> (j * 6)) & 0x3F) as usize];
@@ -227,19 +225,16 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
     let salt_bytes = salt_actual.as_bytes();
     let salt_len = salt_bytes.len();
 
-    // Step 1-5: digest_a streaming context = SHA512(password + salt)
     let mut ctx = Sha512::new();
     ctx.update(pwd);
     ctx.update(salt_bytes);
 
-    // Step 2-8: digest_b = SHA512(password + salt + password)
     let mut alt_ctx = Sha512::new();
     alt_ctx.update(pwd);
     alt_ctx.update(salt_bytes);
     alt_ctx.update(pwd);
     let digest_b = alt_ctx.finalize_reset();
 
-    // Step 9: Extend digest_a with digest_b bytes (64-byte chunks for SHA-512)
     let mut remaining = pwd_len;
     while remaining > 64 {
         ctx.update(&digest_b);
@@ -247,7 +242,6 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
     }
     ctx.update(&digest_b[..remaining]);
 
-    // Step 11: Bit processing
     remaining = pwd_len;
     while remaining > 0 {
         if (remaining & 1) != 0 {
@@ -258,18 +252,15 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
         remaining >>= 1;
     }
 
-    // Step 12: Finish digest_a
     let mut alt_result = [0u8; 64];
     alt_result.copy_from_slice(&ctx.finalize_reset());
 
-    // Step 13-15: digest_dp = SHA512(password repeated pwd_len times)
     alt_ctx.reset();
     for _ in 0..pwd_len {
         alt_ctx.update(pwd);
     }
     let temp_result = alt_ctx.finalize_reset();
 
-    // Step 16: P = temp_result repeated to pwd_len bytes using 64-byte chunks
     let mut p = Vec::with_capacity(pwd_len);
     while p.len() < pwd_len {
         let remaining = pwd_len - p.len();
@@ -277,14 +268,12 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
         p.extend_from_slice(&temp_result[..n]);
     }
 
-    // Step 17-18: digest_ds = SHA512(salt repeated (16 + alt_result[0]) times)
     let repeat_count = 16usize + alt_result[0] as usize;
     for _ in 0..repeat_count {
         alt_ctx.update(salt_bytes);
     }
     let temp_result = alt_ctx.finalize_reset();
 
-    // Step 19-20: S = temp_result repeated to salt_len bytes using 64-byte chunks
     let mut s = Vec::with_capacity(salt_len);
     while s.len() < salt_len {
         let remaining = salt_len - s.len();
@@ -292,7 +281,6 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
         s.extend_from_slice(&temp_result[..n]);
     }
 
-    // Step 21: Iteration loop
     for cnt in 0..rounds {
         let mut ctx = Sha512::new();
 
@@ -319,7 +307,6 @@ pub fn sha512crypt(password: &str, full_salt: &str) -> String {
         alt_result.copy_from_slice(&ctx.finalize_reset());
     }
 
-    // Step 22: Encode
     let encoded = encode_sha512crypt_hash(&alt_result);
     let mut result = String::from("$6$");
     if rounds_custom {

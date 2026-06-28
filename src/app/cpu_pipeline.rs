@@ -45,7 +45,6 @@ pub fn run_prince_cpu(
             total_found.push((idx, entry.0.clone(), pwd.to_string()));
         };
 
-        // Phase 1: single words
         for w in &sorted {
             if module.cpu_verify(w, &salt, hash_slice) {
                 report(w);
@@ -55,7 +54,6 @@ pub fn run_prince_cpu(
         }
         if found { continue; }
 
-        // Phase 2: word pairs
         let pairs = n as u64 * n as u64;
         if pairs <= 10_000_000 {
             eprintln!("  Trying {} word pairs...", pairs);
@@ -74,7 +72,6 @@ pub fn run_prince_cpu(
         }
         if found { continue; }
 
-        // Phase 3: word triples
         let triples = n as u64 * n as u64 * n as u64;
         if triples <= 10_000_000 {
             eprintln!("  Trying {} word triples...", triples);

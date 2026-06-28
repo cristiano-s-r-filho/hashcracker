@@ -1,4 +1,3 @@
-// PDF hash extraction — compatible with hashcat -m 10500/10700 and JtR pdf2john
 
 pub const PDF_PADDING: &[u8; 32] = b"\x28\xBF\x4E\x5E\x4E\x75\x8A\x41\x64\x00\x4E\x56\xFF\xFA\x01\x08\x2E\x2E\x00\xB6\xD0\x68\x3E\x80\x2F\x0C\xA9\xFE\x64\x53\x69\x7A";
 
@@ -15,7 +14,6 @@ pub struct PdfHash {
     pub oe: Vec<u8>,
 }
 
-/// Extract a $pdf$ hash string from a PDF file
 pub fn extract_pdf_hash(path: &str) -> Result<String, String> {
     let data = std::fs::read(path).map_err(|e| format!("Cannot read {}: {}", path, e))?;
     let pdf = parse_pdf(&data)?;
@@ -49,17 +47,13 @@ fn format_pdf_hash(pdf: &PdfHash) -> String {
 }
 
 fn parse_pdf(data: &[u8]) -> Result<PdfHash, String> {
-    // Find trailer
     let trailer = find_trailer(data)?;
 
-    // Extract /ID from trailer
     let id = extract_id(&trailer)?;
 
-    // Find /Encrypt reference in trailer
     let encrypt_ref = find_encrypt_ref(&trailer)?;
     let enc_dict = get_pdf_object(data, &encrypt_ref)?;
 
-    // Extract encryption parameters
     let v = extract_int(&enc_dict, b"/V")?;
     let r = extract_int(&enc_dict, b"/R")?;
     let length = extract_length(&enc_dict, v);
@@ -79,15 +73,12 @@ fn parse_pdf(data: &[u8]) -> Result<PdfHash, String> {
 }
 
 fn find_trailer(data: &[u8]) -> Result<Vec<u8>, String> {
-    // Find "trailer" keyword, then capture everything up to ">>" followed by "startxref"
     let trailer_pos = find_bytes(data, b"trailer")
         .ok_or_else(|| "Could not find trailer keyword".to_string())?;
 
-    // Search forward for "startxref" from trailer position
     let startxref_pos = find_bytes_from(data, b"startxref", trailer_pos)
         .ok_or_else(|| "Could not find startxref after trailer".to_string())?;
 
-    // The trailer content is from trailer_pos to startxref_pos
     let trailer_data = &data[trailer_pos..startxref_pos];
     Ok(trailer_data.to_vec())
 }
@@ -97,9 +88,7 @@ fn find_encrypt_ref(trailer: &[u8]) -> Result<String, String> {
     let pos = find_bytes(trailer, pattern)
         .ok_or_else(|| "File is not encrypted (no /Encrypt in trailer)".to_string())?;
 
-    // Find the object reference: "N N R" after /Encrypt  
     let rest = &trailer[pos + pattern.len()..];
-    // Find the first complete "N N R" pattern  
     let ref_str = extract_ref(rest)?;
     Ok(ref_str)
 }
@@ -150,11 +139,9 @@ fn extract_id(trailer: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn extract_hex_content(data: &[u8]) -> Option<Vec<u8>> {
-    // Find content between < and >
     let start = find_bytes(data, b"<")?;
     let end = find_bytes_from(data, b">", start + 1)?;
     let hex_str = std::str::from_utf8(&data[start + 1..end]).ok()?;
-    // Take only hex chars
     let clean: String = hex_str.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     hex::decode(&clean).ok()
 }
@@ -181,9 +168,8 @@ fn extract_int_signed(data: &[u8], key: &[u8]) -> Result<i32, String> {
 
 fn extract_length(data: &[u8], v: u32) -> u32 {
     if v == 1 {
-        return 40; // Default for V=1
+        return 40;
     }
-    // Try to find /Length
     let pos = find_bytes(data, b"/Length");
     match pos {
         Some(p) => {
@@ -191,9 +177,9 @@ fn extract_length(data: &[u8], v: u32) -> u32 {
             let s = std::str::from_utf8(rest).unwrap_or("");
             let s = s.trim_start();
             let num_str: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-            num_str.parse::<u32>().unwrap_or(128) // Default to 128
+            num_str.parse::<u32>().unwrap_or(128)
         }
-        None => 128, // Default for V >= 2
+        None => 128,
     }
 }
 
@@ -206,7 +192,7 @@ fn extract_encrypt_meta(data: &[u8]) -> bool {
             let s = s.trim_start();
             !s.starts_with("false")
         }
-        None => true, // Default: metadata is encrypted
+        None => true,
     }
 }
 
@@ -218,12 +204,10 @@ fn extract_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     let s = s.trim_start();
 
     if s.starts_with('<') {
-        // Hex string: <hex>
         let end = s.find('>').ok_or_else(|| "Unterminated hex string".to_string())?;
         let hex_str: String = s[1..end].chars().filter(|c| c.is_ascii_hexdigit()).collect();
         hex::decode(&hex_str).map_err(|e| format!("Invalid hex: {}", e))
     } else if s.starts_with('(') {
-        // Literal string: (bytes)
         let mut result = Vec::new();
         let mut chars = s[1..].chars();
         loop {
@@ -247,7 +231,6 @@ fn extract_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
         }
         Ok(result)
     } else {
-        // Could be hex with angle brackets on next line or inline hex without <>
         Err(format!("Unknown byte format for {:?}: starts with '{}'", key, &s[..s.len().min(10)]))
     }
 }
@@ -263,11 +246,8 @@ fn find_bytes_from(data: &[u8], pattern: &[u8], start: usize) -> Option<usize> {
 
 #[test]
 fn test_extract_pdf_hash() {
-    // Use the pdf2hashcat.py to generate a reference hash, then verify our parser.
-    // For now, we only test that the format string is valid.
     let test_hash = "$pdf$2*3*128*-4*1*16*733ab0e911f8aa4c77782aa056996f57*32*0000000000000000000000000000000000000000000000000000000000000000*32*0000000000000000000000000000000000000000000000000000000000000000";
 
-    // Verify format is parseable
     let parsed = crate::hashes::raw_pdf::parse_pdf_hash(test_hash).unwrap();
     assert_eq!(parsed.v, 2);
     assert_eq!(parsed.r, 3);

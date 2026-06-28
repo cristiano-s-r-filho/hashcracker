@@ -86,15 +86,10 @@ impl HashModule for RawHmacSha512 {
     }
 }
 
-// RFC 4231 Test Case 2:
-// Key = "Jefe"  Data = "what do ya want for nothing?"
-// Expected: 164b7a7bfcf819e2e395fbe73b56e0a387bd64222e831fd610270cd7ea2505549758bf75c05a994a6d034f65f8f0e6fdcaeab1a34d4a6b4b636e070a38bce737
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Split 128-hex-char string into 8 pairs of (lower 32 bits, upper 32 bits)
-    // Each u64 word is 16 hex chars: first 8 = upper 32 bits, last 8 = lower 32 bits
     fn hex_to_u32_pairs(hex: &str) -> ([u32; 8], [u32; 8]) {
         let mut target = [0u32; 8];
         let mut extra = [0u32; 8];

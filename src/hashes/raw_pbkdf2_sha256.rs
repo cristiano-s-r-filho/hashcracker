@@ -57,7 +57,6 @@ pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32) -> [u8;
 fn parse_pbkdf2_string(s: &str) -> Result<(u32, Vec<u8>, [u32; 8], [u32; 8]), String> {
     let trimmed = s.trim();
 
-    // Try $pbkdf2-sha256$iterations$salt_hex$hash_hex format
     if trimmed.starts_with("$pbkdf2-sha256$") {
         let inner = &trimmed["$pbkdf2-sha256$".len()..];
         let parts: Vec<&str> = inner.split('$').collect();
@@ -80,7 +79,6 @@ fn parse_pbkdf2_string(s: &str) -> Result<(u32, Vec<u8>, [u32; 8], [u32; 8]), St
         return Ok((iterations, salt_bytes, target, extra));
     }
 
-    // Try sha256:iterations:salt_hex:hash_hex format
     if let Some(colon_pos) = trimmed.find(':') {
         let prefix = &trimmed[..colon_pos];
         if prefix == "sha256" || prefix == "sha-256" {
@@ -116,12 +114,6 @@ impl HashModule for RawPbkdf2Sha256 {
     fn needs_int64(&self) -> bool { false }
 
     fn cpu_verify(&self, _password: &str, _salt: &[u8], _hash: &[u32]) -> bool {
-        // Iterations from hash[8..12] is not standard; we use the host-side iterations.
-        // This function receives salt (raw bytes) and hash (u32[8] target).
-        // We need iterations separately. Since the HashModule trait doesn't pass iterations,
-        // we store it in hash_extra[0] on the Rust side.
-        // This is normally called via verify_password() which needs iterations info.
-        // For now, the cpu_verify is not directly used for cracking (we use cpu_hash instead).
         false
     }
 
@@ -187,7 +179,6 @@ mod tests {
     #[test]
     fn test_parse_dollar_format() {
         let hash_str = "$pbkdf2-sha256$1000$73616c74$632c2812e46d4604102ba7618e9d6d7d2f8128f6266b4a03264d2a0460b7dcb3";
-        // salt_hex: "73616c74" = "salt"
         let parsed = RawPbkdf2Sha256.parse_hash_string(hash_str).unwrap();
         assert_eq!(parsed.salt, b"salt");
         assert_eq!(parsed.extra_words[0], 1000);
@@ -205,7 +196,6 @@ mod tests {
 
     #[test]
     fn test_roundtrip_dollar() {
-        // Generate a hash, format it, parse it back, and verify
         let password = b"abc";
         let salt = b"mysalt";
         let iterations = 1000;

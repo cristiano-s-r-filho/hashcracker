@@ -167,7 +167,7 @@ mod tests {
         let pwd_bytes = password.as_bytes();
         let salt_bytes = hex::decode("aabbccdd").unwrap();
         let iv = hex::decode("0102030405060708090a0b0c0d0e0f10").unwrap();
-        let plaintext = b"Hello RAR5 World!!!"; // 17 bytes
+        let plaintext = b"Hello RAR5 World!!!";
         let iterations = 4096u32;
 
         let key = pbkdf2_hmac_sha256(pwd_bytes, &salt_bytes, iterations);

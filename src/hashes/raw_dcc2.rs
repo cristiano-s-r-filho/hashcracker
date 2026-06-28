@@ -93,22 +93,17 @@ mod tests {
 
     #[test]
     fn test_dcc2_vector() {
-        // Known DCC2 hash for password "test" with username "admin"
-        // SHA-1(MD4(UTF16-LE("test")) || "admin")
         let dcc2 = RawDcc2;
         let (hash, _) = dcc2_hash("test", "admin");
         let hex = format!("{:08x}{:08x}{:08x}{:08x}{:08x}",
             hash[0], hash[1], hash[2], hash[3], hash[4]);
         assert_eq!(hex.len(), 40);
 
-        // Verify via cpu_verify
         let salt = "admin".as_bytes();
         assert!(dcc2.cpu_verify("test", salt, &hash[..5]));
 
-        // Wrong password should fail
         assert!(!dcc2.cpu_verify("wrong", salt, &hash[..5]));
 
-        // parse_hash_string round-trip
         let full = format!("{}:admin", hex);
         let parsed = dcc2.parse_hash_string(&full).unwrap();
         assert_eq!(parsed.hash_words[..5], hash[..5]);

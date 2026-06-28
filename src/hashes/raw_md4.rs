@@ -1,4 +1,3 @@
-// MD4 hash (hashcat -m 900) = MD4(raw bytes)
 pub struct RawMd4;
 
 use crate::hashes::{AttackModeType, HashModule, HashPattern, ParsedHash};
@@ -27,7 +26,7 @@ impl HashModule for RawMd4 {
     }
 
     fn detect_patterns(&self) -> &[HashPattern] {
-        &[HashPattern { prefix: None, hex_len: Some(32), priority: 95 }] // Lower priority than MD5 for hex length collision
+        &[HashPattern { prefix: None, hex_len: Some(32), priority: 95 }]
     }
 
     fn parse_hash_string(&self, s: &str) -> Result<ParsedHash, String> {
@@ -50,7 +49,6 @@ impl HashModule for RawMd4 {
     }
 }
 
-/// Pure Rust MD4 hash
 pub fn raw_md4(data: &[u8]) -> [u8; 16] {
     use md4::{Md4, Digest};
     let mut hasher = Md4::new();
@@ -63,21 +61,18 @@ pub fn raw_md4(data: &[u8]) -> [u8; 16] {
 
 #[test]
 fn test_md4_hash_known() {
-    // MD4("") = 31d6cfe0d16ae931b73c59d7e0c089c0
     let hash = raw_md4(b"");
     assert_eq!(hex::encode(hash), "31d6cfe0d16ae931b73c59d7e0c089c0");
 }
 
 #[test]
 fn test_md4_hash_abc() {
-    // MD4("abc") = a448017aaf21d8525fc10ae87aa6729d
     let hash = raw_md4(b"abc");
     assert_eq!(hex::encode(hash), "a448017aaf21d8525fc10ae87aa6729d");
 }
 
 #[test]
 fn test_md4_hash_password() {
-    // MD4("password") - known value
     let hash = raw_md4(b"password");
     assert_eq!(hex::encode(hash), "8a9d093f14f8701df17732b2bb182c74");
 }

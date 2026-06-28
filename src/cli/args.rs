@@ -1,24 +1,32 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+/// A parsed hash entry ready for cracking.
 #[derive(Debug, Clone)]
 pub struct HashEntry {
+    /// Original hash string (hex or prefixed format)
     pub hex: String,
+    /// First 8 u32 digest words (primary GPU comparison)
     pub hash: [u32; 8],
+    /// Next 8 u32 digest words (for 128-byte digest hashes like SHA-512)
     pub hash_extra: [u32; 8],
+    /// Salt buffer padded to 64 bytes (16 × u32)
     pub salt: [u32; 16],
+    /// Salt length in bytes
     pub salt_len: u32,
+    /// Username extracted from `user:hash` format (DCC, PostgreSQL)
     pub username: Option<String>,
 }
 
+/// Command-line arguments for hashcracker.
 #[derive(Parser, Clone)]
 #[command(
     name = "hashcracker",
     version,
-    about = "GPU-accelerated password cracker — 41 hash types, Vulkan/Metal/DX12, single binary",
+    about = "GPU-accelerated password cracker — 42 hash types, Vulkan/Metal/DX12, single binary",
     long_about = "hashcracker — GPU-accelerated password cracking with a focus on portability and ergonomics.
 
-Supports 41 hash types across CPU and GPU (Vulkan via wgpu).
+Supports 42 hash types across CPU and GPU (Vulkan via wgpu).
 Auto-detects hash type from format prefixes and hex lengths.
 
 Examples:
@@ -29,12 +37,11 @@ Examples:
   hashcracker --show
   hashcracker --extract pdf document.pdf
 
-Documentation: https://github.com/anomalyco/hashcracker
+Documentation: https:
 ",
     arg_required_else_help = true,
 )]
 pub struct Args {
-    // === Attack configuration ===
     #[arg(short, long, default_value = "brute",
         help = "Attack mode: brute, wordlist, mask, hybrid, prince, single, markov, incremental")]
     pub mode: String,
@@ -43,7 +50,7 @@ pub struct Args {
     pub password: Option<String>,
 
     #[arg(long, default_value = "auto",
-        help = "Hash type (auto-detect, or pick from 41 types: md5, sha1, sha256, sha512, ntlm, bcrypt, keepass, ...)")]
+        help = "Hash type (auto-detect, or pick from 42 types: md5, sha1, sha256, sha512, ntlm, bcrypt, keepass, ...)")]
     pub hash_type: String,
 
     #[arg(short, long,
@@ -74,7 +81,6 @@ pub struct Args {
         help = "Filter constraints: min=X, max=X, chars=abc")]
     pub filter: Vec<String>,
 
-    // === Target specification ===
     #[arg(long,
         help = "Single target hash (hex string or prefixed format like $1$..., $6$...)")]
     pub hash: Option<String>,
@@ -83,7 +89,6 @@ pub struct Args {
         help = "Hashlist file (one hash per line, supports user:hash format)")]
     pub hashlist: Option<PathBuf>,
 
-    // === Attack modes ===
     #[arg(long,
         help = "Prince mode dictionary file (word-concatenation chains)")]
     pub prince_dict: Option<PathBuf>,
@@ -96,7 +101,6 @@ pub struct Args {
         help = "Generate candidate passwords to stdout (no cracking)")]
     pub stdout: bool,
 
-    // === Session & persistence ===
     #[arg(long,
         help = "Session name for save/resume")]
     pub session: Option<String>,
@@ -105,7 +109,6 @@ pub struct Args {
         help = "Custom potfile path (default: ~/.hashcracker/potfile)")]
     pub potfile: Option<PathBuf>,
 
-    // === Display modes ===
     #[arg(long, default_value = "false",
         help = "Show cracked passwords from potfile")]
     pub show: bool,
@@ -130,7 +133,6 @@ pub struct Args {
         help = "Machine-readable JSON-line output per event")]
     pub json: bool,
 
-    // === Utility ===
     #[arg(long, default_value = "false",
         help = "Benchmark all supported hash types")]
     pub bench: bool,
@@ -138,4 +140,8 @@ pub struct Args {
     #[arg(long,
         help = "Extract hash from file (pdf, zip)")]
     pub extract: Option<String>,
+
+    #[arg(long, default_value = "false",
+        help = "Run quick demo with embedded test data")]
+    pub demo: bool,
 }

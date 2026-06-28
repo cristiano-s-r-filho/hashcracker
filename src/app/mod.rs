@@ -11,8 +11,6 @@ use crate::hash_backend::{HashType, AttackMode, parse_hex_hash_opt};
 use crate::potfile::Potfile;
 use crate::session;
 
-/// Central application state. Holds all configuration and mutable state
-/// for a single cracking session.
 pub struct App {
     pub args: crate::cli::Args,
     pub hash_type: HashType,
@@ -27,7 +25,6 @@ pub struct App {
 }
 
 impl App {
-    /// Parse CLI args and build App.
     pub fn new(args: crate::cli::Args) -> Self {
         let potfile_path = args.potfile.clone().unwrap_or_else(|| {
             let home = std::env::var("HOME")
@@ -49,7 +46,6 @@ impl App {
         }
     }
 
-    /// Run show mode: display cracked passwords from potfile.
     pub fn run_show(&self) {
         let hashes: Vec<String> = self.collect_show_hashes();
         println!("Cracked passwords:");
@@ -60,7 +56,6 @@ impl App {
         }
     }
 
-    /// Run left mode: display uncracked hashes.
     pub fn run_left(&self) {
         let hashes: Vec<String> = self.collect_show_hashes();
         println!("Remaining hashes:");
@@ -71,7 +66,6 @@ impl App {
         }
     }
 
-    /// Collect hashes for show/left modes.
     fn collect_show_hashes(&self) -> Vec<String> {
         if let Some(hashlist_path) = &self.args.hashlist {
             std::fs::read_to_string(hashlist_path)
@@ -94,7 +88,6 @@ impl App {
         }
     }
 
-    /// Initialize session (load or create).
     pub fn init_session(&mut self) {
         self.active_session = self.args.session.as_ref().map(|name| session::Session::new(name));
         if let Some(ref mut sess) = self.active_session {
@@ -114,7 +107,6 @@ impl App {
         }
     }
 
-    /// Parse hash list or single hash into entries.
     pub fn collect_entries(&mut self) {
         let (entries, hash_type, _password, _parsed_salt) = if let Some(hashlist_path) = &self.args.hashlist {
             let preferred = if self.args.hash_type == "auto" { None }
@@ -156,7 +148,6 @@ impl App {
         self.entries = entries;
     }
 
-    /// Parse a single --hash argument
     fn parse_single_hash(&self, hash_str: &str) -> ([u32; 8], [u32; 8], HashType, Vec<u8>) {
         if hash_str.trim().starts_with('$') || hash_str.trim().contains(':') {
             if let Some(module) = crate::hashes::registry::autodetect(hash_str) {
@@ -186,7 +177,6 @@ impl App {
         }
     }
 
-    /// Parse attack mode and compute keyspace.
     pub fn parse_attack_mode(&mut self) {
         let is_auto = self.args.hash_type == "auto" || self.args.hash.is_some() || self.args.hashlist.is_some();
         let password = self.args.password.clone().unwrap_or_else(|| "abc".to_string());
@@ -294,7 +284,6 @@ impl App {
         eprintln!("Filtered to {}", filtered.len()); filtered
     }
 
-    /// Set up salt buffer from entries or from --salt CLI flag.
     pub fn setup_salt(&mut self) {
         let salt_bytes = self.args.salt.as_bytes();
         let salt_len = salt_bytes.len().min(16) as u32;

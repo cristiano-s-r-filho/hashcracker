@@ -39,36 +39,64 @@ pub mod raw_rar5;
 pub mod raw_wpa;
 pub mod registry;
 
+/// Detection pattern for auto-identifying a hash type from its string representation.
+///
+/// A hash is matched if its string starts with `prefix` OR its hex length equals `hex_len`.
+/// When multiple modules match, the one with highest `priority` wins.
 pub struct HashPattern {
+    /// Optional literal prefix (e.g. `"$1$"`, `"$2y$"`, `"$pkzip$"`)
     pub prefix: Option<&'static str>,
+    /// Optional expected hex-char length (e.g. 32 for MD5, 64 for SHA-256)
     pub hex_len: Option<usize>,
+    /// Match priority; higher values win when multiple patterns match
     pub priority: u8,
 }
 
+/// A hash parsed into its internal representation for GPU comparison.
 pub struct ParsedHash {
+    /// First 8 digest words (primary comparison)
     pub hash_words: [u32; 8],
+    /// Next 8 digest words (for hashes with >8 words, e.g. SHA-512)
     pub extra_words: [u32; 8],
+    /// Salt bytes extracted from the hash string
     pub salt: Vec<u8>,
+    /// Number of u32 digest words produced by this hash type
     #[allow(dead_code)]
     pub digest_words: u32,
 }
 
+/// Trait that every hash type must implement.
+///
+/// Provides the CPU verification function, WGSL shader source,
+/// auto-detection patterns, and hash-string parsing.
 pub trait HashModule: Send + Sync {
+    /// Human-readable name (e.g. `"md5"`, `"sha256"`, `"bcrypt"`)
     fn name(&self) -> &'static str;
+    /// Hashcat mode number for reference
     #[allow(dead_code)]
     fn mode(&self) -> u32;
+    /// Number of u32 digest words this hash produces
     fn digest_words(&self) -> u32;
+    /// Verify a password against a parsed hash + salt. Returns `true` if it matches.
     fn cpu_verify(&self, password: &str, salt: &[u8], hash: &[u32]) -> bool;
+    /// WGSL shader source for the given attack mode; empty string = CPU-only.
     fn shader_source(&self, mode: &AttackModeType) -> &'static str;
+    /// Whether the WGSL kernel requires `SHADER_INT64` feature (for SHA-512 family)
     fn needs_int64(&self) -> bool;
+    /// List of detection patterns used during auto-detection
     fn detect_patterns(&self) -> &[HashPattern];
+    /// Parse a hash string into its internal representation
     fn parse_hash_string(&self, s: &str) -> Result<ParsedHash, String>;
 }
 
+/// The GPU pipeline variant for a given attack mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttackModeType {
+    /// Brute-force kernel (single workgroup, no wordlist input)
     BruteForce,
+    /// Mask kernel (position-aware charset per slot)
     Mask,
+    /// Wordlist/hybrid kernel (reads password candidates from a buffer)
     Wordlist,
 }
 

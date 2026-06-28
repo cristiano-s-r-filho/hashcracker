@@ -32,7 +32,6 @@ fn phpass_encode64(hash: &[u8; 16]) -> String {
         bi += 3;
         oi += 4;
     }
-    // Last byte → 2 chars
     let value = hash[15] as u32;
     out[oi] = ITOA64[(value & 0x3f) as usize];
     out[oi + 1] = ITOA64[((value >> 6) & 0x3f) as usize];
@@ -59,7 +58,6 @@ fn phpass_decode64(encoded: &str) -> Result<[u8; 16], String> {
         out[oi + 2] = ((value >> 16) & 0xff) as u8;
         oi += 3;
     }
-    // Last 2 chars → 1 byte
     let c0 = itoa64_idx(bytes[ci]).ok_or("Invalid base64 char")? as u32;
     let c1 = itoa64_idx(bytes[ci + 1]).ok_or("Invalid base64 char")? as u32;
     let value = c0 | (c1 << 6);
@@ -103,14 +101,12 @@ pub fn phpass_hash(password: &str, encoded: &str) -> String {
     let salt_bytes = s[1..9].as_bytes();
     let salt_len = salt_bytes.len().min(8);
 
-    // hash = MD5(salt + password)
     let mut ctx = Md5::new();
     ctx.update(&salt_bytes[..salt_len]);
     ctx.update(pwd);
     let mut hash = [0u8; 16];
     hash.copy_from_slice(&ctx.finalize_reset());
 
-    // Repeat count times: hash = MD5(hash + password)
     for _ in 0..count {
         ctx.update(&hash);
         ctx.update(pwd);

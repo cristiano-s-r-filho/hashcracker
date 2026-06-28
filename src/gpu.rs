@@ -3,21 +3,38 @@ use std::sync::Arc;
 
 use crate::hash_backend::{AttackMode, HashType};
 
+/// GPU-configuration buffer layout (mirrors WGSL `Config` struct).
+///
+/// This struct is mapped directly to a GPU storage buffer (binding 0)
+/// shared by all WGSL kernels.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct GpuConfig {
+    /// Primary target hash words (first 8)
     pub target_hash: [u32; 8],
+    /// Current password length in characters
     pub password_len: u32,
+    /// Total number of password candidates in this dispatch
     pub num_passwords: u32,
+    /// Set to 1 by any thread that finds a match
     pub found_flag: u32,
+    /// Password buffer for the match (padded to 4 u32)
     pub found_password: [u32; 4],
+    /// Packed mask pattern (charset codes for each position)
     pub mask: [u32; 16],
+    /// Number of active mask positions
     pub mask_len: u32,
+    /// Secondary target hash words (for 128-byte digests)
     pub target_hash_extra: [u32; 8],
+    /// Salt buffer (padded to 64 bytes)
     pub salt: [u32; 16],
+    /// Salt length in bytes
     pub salt_len: u32,
+    /// Start index for this dispatch range
     pub range_start: u32,
+    /// End index for this dispatch range
     pub range_end: u32,
+    /// Number of active target entries in the targets buffer
     pub num_targets: u32,
 }
 
@@ -28,19 +45,30 @@ struct WordEntry {
     len: u32,
 }
 
+/// A single entry in the multi-target comparison buffer on the GPU.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct TargetEntry {
+    /// First 8 hash words for comparison
     pub hash: [u32; 8],
+    /// Next 8 hash words (for 128-byte digest hashes)
     pub hash_extra: [u32; 8],
 }
 
+/// Data read back from the GPU after a dispatch.
 pub struct ReadbackData {
+    /// Number of candidates processed
     pub progress: u32,
+    /// 1 if a password was found
     pub found_flag: u32,
+    /// Password buffer (padded to 4 u32, 16 bytes)
     pub found_password: [u32; 4],
 }
 
+/// A GPU-accelerated cracker instance for one hash type + attack mode.
+///
+/// Each variant (BruteForce, Mask, Wordlist, Hybrid) owns pipeline state
+/// and buffers specific to that mode.
 pub enum GpuCracker {
     BruteForce {
         device: wgpu::Device,
@@ -174,7 +202,6 @@ impl GpuCracker {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        // Write initial single target
         let initial_target = TargetEntry { hash: target_hash, hash_extra: target_hash_extra };
         queue.write_buffer(&target_buf, 0, bytemuck::bytes_of(&initial_target));
 
@@ -360,12 +387,9 @@ impl GpuCracker {
                         let bytes = w.as_bytes();
                         let len = bytes.len().min(4) as u32;
                         let mut chars = [0u32; 5];
-                        // Store one char per u32, in reverse order (last char first)
-                        // to match the pwd convention used by index_to_password
                         for (i, &b) in bytes.iter().rev().enumerate().take(len as usize) {
                             chars[i] = b as u32;
                         }
-                        // null terminator after last character (for bcrypt)
                         chars[len as usize] = 0u32;
                         WordEntry { chars, len }
                     })
@@ -445,7 +469,6 @@ impl GpuCracker {
                 }
             }
             AttackMode::Hybrid { words, mask, keyspace: _, password_len: hybrid_pass_len, suffix } => {
-                // Pre-compute all word + mask combinations on CPU
                 let mask_keyspace = AttackMode::mask_keyspace(&mask, hybrid_pass_len);
                 let mut candidates = Vec::with_capacity(words.len() * mask_keyspace as usize);
 
@@ -693,7 +716,6 @@ impl GpuCracker {
         }
     }
 
-    /// Write all targets to the target buffer and update num_targets.
     pub fn write_targets(&mut self, entries: &[TargetEntry]) {
         let (_device, queue, config_buf, target_buf, progress_buf) = match self {
             GpuCracker::BruteForce { device, queue, config_buf, target_buf, progress_buf, .. }
@@ -712,7 +734,6 @@ impl GpuCracker {
 
     #[allow(dead_code)]
     pub fn redispatch(&mut self, target_hash: [u32; 8], target_hash_extra: [u32; 8]) {
-        // Resolve mutable fields before borrowing immutable ones
         let _need_unmap = match self {
             GpuCracker::BruteForce { has_pending_readback, staging_ready, staging, .. }
             | GpuCracker::Mask { has_pending_readback, staging_ready, staging, .. }
@@ -751,15 +772,13 @@ impl GpuCracker {
                 }
             };
 
-        // Write new target hash + reset found_flag, progress, and range
         queue.write_buffer(config_buf, 0, bytemuck::bytes_of(&target_hash));
         queue.write_buffer(config_buf, 128, bytemuck::bytes_of(&target_hash_extra));
-        queue.write_buffer(config_buf, 40, bytemuck::bytes_of(&0u32)); // found_flag = 0
-        queue.write_buffer(progress_buf, 0, bytemuck::bytes_of(&0u32)); // progress = 0
-        // Reset range to full keyspace for fresh hash
-        queue.write_buffer(config_buf, 228, bytemuck::bytes_of(&0u32)); // range_start = 0
-        queue.write_buffer(config_buf, 232, bytemuck::bytes_of(num_passwords)); // range_end = total
-        queue.write_buffer(config_buf, 236, bytemuck::bytes_of(&1u32)); // num_targets = 1
+        queue.write_buffer(config_buf, 40, bytemuck::bytes_of(&0u32));
+        queue.write_buffer(progress_buf, 0, bytemuck::bytes_of(&0u32));
+        queue.write_buffer(config_buf, 228, bytemuck::bytes_of(&0u32));
+        queue.write_buffer(config_buf, 232, bytemuck::bytes_of(num_passwords));
+        queue.write_buffer(config_buf, 236, bytemuck::bytes_of(&1u32));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("redispatch"),
@@ -778,10 +797,7 @@ impl GpuCracker {
         queue.submit([encoder.finish()]);
     }
 
-    /// Change the password length and keyspace, recalculate workgroups, and redispatch.
-    /// Only valid for BruteForce variant.
     pub fn reconfig_len(&mut self, new_password_len: u32, new_num_passwords: u32) {
-        // Step 1: clean up staging state in a block (mutable borrow dropped after block)
         {
             let (has_pending_readback, staging_ready, staging) = match self {
                 GpuCracker::BruteForce { has_pending_readback, staging_ready, staging, .. } => {
@@ -798,7 +814,6 @@ impl GpuCracker {
             }
         }
 
-        // Step 2: update stored fields in a block
         {
             let (num_passwords, password_len, workgroup_x, workgroup_y) = match self {
                 GpuCracker::BruteForce { num_passwords, password_len, workgroup_x, workgroup_y, .. } => {
@@ -813,7 +828,6 @@ impl GpuCracker {
             *workgroup_y = workgroups.div_ceil(65535);
         }
 
-        // Step 3: borrow immutably for dispatch
         let (device, queue, config_buf, progress_buf, staging_for_dispatch, pipeline, bind_group, wg_x, wg_y) = match self {
             GpuCracker::BruteForce { device, queue, config_buf, progress_buf, staging, target_buf: _, pipeline, bind_group, workgroup_x, workgroup_y, .. } => {
                 (device, queue, config_buf, progress_buf, staging, pipeline, bind_group, *workgroup_x, *workgroup_y)
@@ -843,11 +857,8 @@ impl GpuCracker {
         queue.submit([encoder.finish()]);
     }
 
-    /// Dispatch a sub-range of the keyspace. Sets range_start/range_end in config,
-    /// recalculates workgroups for (range_end - range_start) candidates.
     pub fn redispatch_range(&mut self, range_start: u32, range_end: u32) {
         let chunk_size = range_end.saturating_sub(range_start);
-        // Resolve mutable fields for cleanup
         let _ = match self {
             GpuCracker::BruteForce { staging_ready, staging, .. }
             | GpuCracker::Mask { staging_ready, staging, .. }
@@ -860,13 +871,9 @@ impl GpuCracker {
             }
         };
 
-        // Determine workgroup size for this mode
         let wgs = match self {
             GpuCracker::BruteForce { .. } | GpuCracker::Mask { .. }
             | GpuCracker::Wordlist { .. } | GpuCracker::Hybrid { .. } => {
-                // All standard modes use 128; bcrypt uses 32, drupal7 uses 64.
-                // We cannot know the workgroup size from the Rust side, so we
-                // compute workgroups uniformly. The kernel does its own bounds check.
                 128u32
             }
         };
@@ -874,7 +881,6 @@ impl GpuCracker {
         let wg_x = workgroups.min(65535);
         let wg_y = workgroups.div_ceil(65535);
 
-        // Update stored workgroup counts
         match self {
             GpuCracker::BruteForce { workgroup_x, workgroup_y, .. }
             | GpuCracker::Mask { workgroup_x, workgroup_y, .. }
@@ -915,7 +921,6 @@ impl GpuCracker {
         encoder.copy_buffer_to_buffer(config_buf, 40, staging, 4, 20);
         queue.submit([encoder.finish()]);
 
-        // Poll then map_async so the callback fires when this encoder completes.
         let _ = device.poll(wgpu::PollType::Poll);
         let ready = staging_ready.clone();
         staging.slice(..).map_async(wgpu::MapMode::Read, move |r| {

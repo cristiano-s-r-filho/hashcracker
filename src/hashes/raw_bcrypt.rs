@@ -1,4 +1,3 @@
-// bcrypt (hashcat -m 3200)
 pub struct RawBcrypt;
 
 use crate::hashes::{AttackModeType, HashModule, HashPattern, ParsedHash};
@@ -37,31 +36,27 @@ impl HashModule for RawBcrypt {
         let salt_str = parts.get_salt();
         let _cost = parts.get_cost();
 
-        // Decode base64 salt (22 chars -> 16 bytes)
         let salt_vec = decode_bcrypt_base64(&salt_str, 16)
             .map_err(|e| format!("Failed to decode bcrypt salt: {}", e))?;
         let mut salt_arr = [0u8; 16];
         salt_arr.copy_from_slice(&salt_vec);
 
-        // Decode base64 hash (last 31 chars after the 22-char salt -> 23 bytes, padded to 24)
         let combined = s.rsplit('$').next().unwrap_or("");
         if combined.len() < 22 + 31 {
             return Err("Bcrypt hash string too short".to_string());
         }
-        let hash_b64 = &combined[22..];  // skip 22-char salt
+        let hash_b64 = &combined[22..];
         let hash_vec = decode_bcrypt_base64(hash_b64, 23)
             .map_err(|e| format!("Failed to decode bcrypt hash: {}", e))?;
 
         let mut hash_bytes = [0u8; 24];
         hash_bytes[..23].copy_from_slice(&hash_vec);
-        // 24th byte is zero (base64 encoding of 23 bytes + 2 bits padding)
 
         let mut hash_words = [0u32; 8];
         for i in 0..6 {
             let start = i * 4;
             let mut buf = [0u8; 4];
             buf.copy_from_slice(&hash_bytes[start..start + 4]);
-            // bcrypt stores output in big-endian u32 order
             hash_words[i] = u32::from_be_bytes(buf);
         }
 
@@ -74,8 +69,6 @@ impl HashModule for RawBcrypt {
     }
 }
 
-/// Compute bcrypt hash: returns 24 raw bytes
-/// Password is null-terminated internally (matching bcrypt crate's _hash_password)
 pub fn bcrypt_hash(password: &str, salt: &str, cost: u32) -> [u8; 24] {
     let salt_bytes = if salt.len() == 16 {
         let mut arr = [0u8; 16];
@@ -111,7 +104,6 @@ pub fn bcrypt_hash(password: &str, salt: &str, cost: u32) -> [u8; 24] {
     bcrypt::bcrypt(cost, salt_bytes, &pwd_bytes)
 }
 
-/// Decode bcrypt custom base64 (standard crypt alphabet: ./A-Za-z0-9)
 fn decode_bcrypt_base64_impl(chars: &[u8], expected_bytes: usize) -> Result<Vec<u8>, String> {
     const ALPHABET: &[u8] = b"./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     fn idx(c: u8, alph: &[u8]) -> Result<u32, String> {
@@ -132,7 +124,6 @@ fn decode_bcrypt_base64_impl(chars: &[u8], expected_bytes: usize) -> Result<Vec<
         i += 4;
     }
 
-    // Handle trailing 2-3 chars (bcrypt: 22-char salt, 31-char hash)
     if out.len() < expected_bytes && i + 2 <= chars.len() {
         let c0 = idx(chars[i], ALPHABET)?;
         let c1 = idx(chars[i + 1], ALPHABET)?;
@@ -155,7 +146,6 @@ fn decode_bcrypt_base64(s: &str, expected_bytes: usize) -> Result<Vec<u8>, Strin
     decode_bcrypt_base64_impl(s.as_bytes(), expected_bytes)
 }
 
-/// Encode bytes to bcrypt custom base64
 #[allow(dead_code)]
 fn encode_bcrypt_base64(data: &[u8]) -> String {
     const ALPHABET: &[u8] = b"./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -185,10 +175,8 @@ fn encode_bcrypt_base64(data: &[u8]) -> String {
 
 #[test]
 fn test_bcrypt_verify() {
-    // Use the crate's hash function to generate, then verify
     let hash = bcrypt::hash("abc", 4).unwrap();
     eprintln!("BCRYPT HASH FOR abc: {}", hash);
-    // Hash should start with $2b$04$ or $2a$04$
     assert!(hash.starts_with("$2"));
     assert!(bcrypt::verify("abc", &hash).unwrap());
     assert!(!bcrypt::verify("wrong_password", &hash).unwrap());
@@ -197,56 +185,46 @@ fn test_bcrypt_verify() {
 #[test]
 fn test_bcrypt_parse_and_verify() {
     let hash_str = "$2b$04$crMTmHIF5jdy0n07vh/3ROpLLyDF6ah99PaO/xuI2dazgYeDlMJ82";
-    // Parse the salt from the hash
     use std::str::FromStr;
     let parts = bcrypt::HashParts::from_str(hash_str).unwrap();
     let salt_str = parts.get_salt();
     let cost = parts.get_cost();
     eprintln!("Salt string (22 chars): '{}', cost: {}", salt_str, cost);
     
-    // Decode salt from base64
     let salt_vec = decode_bcrypt_base64(&salt_str, 16).unwrap();
     eprintln!("Decoded salt (16 bytes): {:02x?}", salt_vec);
     
     let mut salt_arr = [0u8; 16];
     salt_arr.copy_from_slice(&salt_vec);
     
-    // Compute hash with bcrypt crate (null-terminated, matching _hash_password)
     let raw = bcrypt::bcrypt(cost, salt_arr, b"abc\0");
     eprintln!("Raw bcrypt hash (24 bytes): {:02x?}", raw);
     
-    // Decode the hash from the hash string
     let combined = hash_str.rsplit('$').next().unwrap_or("");
-    let hash_b64 = &combined[22..];  // skip 22-char salt
+    let hash_b64 = &combined[22..];
     eprintln!("Hash part (31 chars): '{}'", hash_b64);
     let hash_bytes = decode_bcrypt_base64(hash_b64, 23).unwrap();
     eprintln!("Decoded hash from string (23 bytes): {:02x?}", hash_bytes);
     
-    // Re-encode the decoded hash bytes (23 bytes) to base64 to compare with original
     let encoded_hash_bytes = encode_bcrypt_base64(&hash_bytes);
     eprintln!("Encoded decoded hash (23→31 chars): '{}'", encoded_hash_bytes);
     eprintln!("Expected hash b64 (31 chars):          '{}'", hash_b64);
     
-    // Also re-encode the raw bcrypt hash (only first 23 bytes, matching the hash string)
     let encoded_raw = encode_bcrypt_base64(&raw[..23]);
     eprintln!("Encoded raw[..23] (23→31 chars): '{}'", encoded_raw);
     let encoded_truncated = &encoded_raw;
     
-    // Verify truncated match
     assert_eq!(encoded_truncated, hash_b64, "Encoded hash should match hash part");
     
-    // Test: re-encode the salt and verify it matches the salt from the hash
     let encoded_salt = encode_bcrypt_base64(&salt_arr);
     eprintln!("Encoded salt (16→22 chars):  '{}'", encoded_salt);
     eprintln!("Expected salt (22 chars):    '{}'", salt_str);
     assert_eq!(encoded_salt, salt_str, "Salt roundtrip should match");
     
-    // Now test our bcrypt_hash function
     let our_result = bcrypt_hash("abc", &salt_str, cost);
     eprintln!("Our bcrypt_hash result (24 bytes): {:02x?}", our_result);
     assert_eq!(our_result, raw, "Our bcrypt_hash should match crate's bcrypt");
     
-    // Test with default salt (empty string)
     let default_result = bcrypt_hash("abc", "", 4);
     eprintln!("Default salt result: {:02x?}", default_result);
 }
@@ -273,7 +251,6 @@ fn test_bcrypt_base64_roundtrip() {
 #[test]
 fn test_bcrypt_debug_target_words() {
     let hash_str = "$2b$04$crMTmHIF5jdy0n07vh/3ROpLLyDF6ah99PaO/xuI2dazgYeDlMJ82";
-    // Parse salt
     use std::str::FromStr;
     let parts = bcrypt::HashParts::from_str(hash_str).unwrap();
     let salt_str = parts.get_salt();
@@ -282,11 +259,9 @@ fn test_bcrypt_debug_target_words() {
     let mut salt_arr = [0u8; 16];
     salt_arr.copy_from_slice(&salt_vec);
     
-    // Compute full 24-byte hash
     let raw = bcrypt::bcrypt(cost, salt_arr, b"abc\0");
     eprintln!("Full 24-byte hash: {:02x?}", raw);
     
-    // Target hash words from 23-byte (truncated) decoded hash
     let combined = hash_str.rsplit('$').next().unwrap_or("");
     let hash_b64 = &combined[22..];
     let hash_bytes_decoded = decode_bcrypt_base64(hash_b64, 23).unwrap();
@@ -300,7 +275,6 @@ fn test_bcrypt_debug_target_words() {
         target_words[i] = u32::from_be_bytes(buf);
     }
     
-    // GPU computed words (from full 24-byte)
     let mut gpu_words = [0u32; 6];
     for i in 0..6 {
         gpu_words[i] = u32::from_be_bytes(raw[i*4..i*4+4].try_into().unwrap());
@@ -309,7 +283,6 @@ fn test_bcrypt_debug_target_words() {
     eprintln!("Target words (23-byte):  {:08x?}", target_words);
     eprintln!("GPU words (24-byte):     {:08x?}", gpu_words);
     
-    // Check comparison with the mask
     let masked_gpu5 = gpu_words[5] & 0xFFFFFF00;
     eprintln!("Masked gpu[5] ({:08x} & FFFFFF00 = {:08x}) vs target[5] ({:08x})", 
         gpu_words[5], masked_gpu5, target_words[5]);
@@ -317,5 +290,4 @@ fn test_bcrypt_debug_target_words() {
     eprintln!("First 5 match: {}", target_words[..5] == gpu_words[..5]);
     eprintln!("Word 5 match masked: {}", masked_gpu5 == target_words[5]);
 }
-
 

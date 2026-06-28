@@ -4,7 +4,6 @@ use crate::hash_backend::{HashType, parse_hex_hash_opt};
 use crate::hashes::registry;
 use crate::potfile::Potfile;
 
-/// Suggest possible hash types for a hex string that failed auto-detection
 pub fn suggest_hash_types(s: &str) -> String {
     let clean = s.trim().split(':').next().unwrap_or(s.trim());
     let suggestions: Vec<&str> = match clean.len() {
@@ -26,7 +25,6 @@ pub fn maybe_suggest(s: &str) {
     eprintln!("  Hint: {}", suggestion);
 }
 
-/// Convert a salt byte slice to [u32; 16] (reverse order, one byte per u32).
 pub fn salt_vec_to_arr(salt: &[u8]) -> ([u32; 16], u32) {
     let len = salt.len().min(16) as u32;
     let mut arr = [0u32; 16];
@@ -36,14 +34,12 @@ pub fn salt_vec_to_arr(salt: &[u8]) -> ([u32; 16], u32) {
     (arr, len)
 }
 
-/// Convert a [u32; 16] salt array back to a byte vector.
 pub fn salt_from_arr(arr: &[u32; 16], len: u32) -> Vec<u8> {
     (0..len as usize)
         .map(|i| arr[len as usize - 1 - i] as u8)
         .collect()
 }
 
-/// Parse a hashlist file, detecting hash types per line.
 pub fn parse_hashlist_file_opt(path: &PathBuf, preferred: Option<HashType>) -> Vec<(String, Option<String>, [u32; 8], [u32; 8], HashType)> {
     let content = std::fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("Failed to read hashlist '{}': {}", path.display(), e);
@@ -59,10 +55,8 @@ pub fn parse_hashlist_file_opt(path: &PathBuf, preferred: Option<HashType>) -> V
             continue;
         }
 
-        // Extract optional username prefix: "username:hash"
         let (username, effective_line) = if let Some(colon_pos) = trimmed.find(':') {
             let candidate = &trimmed[..colon_pos];
-            // If the part before ':' is not all-hex and doesn't start with '$', it's a username
             if !candidate.chars().all(|c| c.is_ascii_hexdigit()) && !candidate.starts_with('$') {
                 (Some(candidate.to_string()), &trimmed[colon_pos + 1..])
             } else {
@@ -73,7 +67,6 @@ pub fn parse_hashlist_file_opt(path: &PathBuf, preferred: Option<HashType>) -> V
         };
 
         let (th, the, ht) = if effective_line.starts_with('$') {
-            // Prefixed hash — always autodetect from prefix
             if let Some(module) = registry::autodetect(effective_line) {
                 let ht = HashType::from_str(module.name()).unwrap_or_else(|_| {
                     eprintln!("Error on line {}: autodetected '{}' but cannot map", lineno + 1, module.name());
@@ -90,7 +83,6 @@ pub fn parse_hashlist_file_opt(path: &PathBuf, preferred: Option<HashType>) -> V
                 std::process::exit(1);
             }
         } else if effective_line.contains(':') {
-            // hash:salt format — use autodetect on the full string
             if let Some(module) = registry::autodetect(effective_line) {
                 let ht = HashType::from_str(module.name()).unwrap_or_else(|_| {
                     eprintln!("Error on line {}: autodetected '{}' but cannot map", lineno + 1, module.name());
@@ -132,7 +124,6 @@ pub fn parse_hashlist_file_opt(path: &PathBuf, preferred: Option<HashType>) -> V
     entries
 }
 
-/// Read wordlist passwords: from file or from potfile (loopback).
 pub fn read_wordlist_words(loopback: bool, wordlist_path: Option<PathBuf>, potfile: &Potfile) -> Vec<String> {
     let words: Vec<String> = if loopback {
         potfile.entries().iter()
@@ -159,7 +150,6 @@ pub fn read_wordlist_words(loopback: bool, wordlist_path: Option<PathBuf>, potfi
     words
 }
 
-/// Save session state to disk.
 pub fn save_session_state(
     sess: &crate::session::Session,
     hash_type: &str,

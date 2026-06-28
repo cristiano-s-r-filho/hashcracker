@@ -8,7 +8,6 @@ use crate::hash_backend::{AttackMode, HashType, full_hash_slice};
 use crate::hashes::AttackModeType;
 use crate::cli;
 
-/// Run the main GPU cracking loop: dispatch chunks, poll GPU, verify candidates.
 #[allow(clippy::too_many_arguments)]
 pub fn run_gpu_attack(
     hash_type: HashType,
@@ -29,7 +28,6 @@ pub fn run_gpu_attack(
     mode: &str,
     hex_mode: bool,
 ) {
-    // --- CPU wordlist fallback for CPU-only types
     let is_cpu_only = hash_type.module().shader_source(&AttackModeType::Wordlist).is_empty();
     if is_cpu_only && matches!(&attack_mode, AttackMode::Wordlist { .. }) {
         if let AttackMode::Wordlist { words } = &attack_mode {
@@ -57,7 +55,6 @@ pub fn run_gpu_attack(
         }
     }
 
-    // --- Main cracking loop
     let num_hashes = entries.len();
     let is_incremental = mode == "incremental";
 
@@ -122,7 +119,6 @@ pub fn run_gpu_attack(
     };
     write_remaining(&mut gpu, &remaining);
 
-    // Session state tracking
     let mut session_state_opt = None;
     if let Some(ref mut sess) = active_session {
         if sess.exists() {
@@ -356,7 +352,6 @@ pub fn run_gpu_attack(
     }
 }
 
-/// Save session state to disk.
 #[allow(clippy::too_many_arguments)]
 fn save_session_progress(
     active_session: &mut Option<crate::session::Session>,

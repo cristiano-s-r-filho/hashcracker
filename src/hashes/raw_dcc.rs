@@ -92,23 +92,17 @@ mod tests {
 
     #[test]
     fn test_dcc_vector() {
-        // Known DCC hash for password "test" with username "admin"
-        // MD4(UTF16-LE("test")) = NTLM hash for "test"
-        // Then MD4(NTLM_hash || "admin") = DCC hash
         let dcc = RawDcc;
         let (hash, _) = dcc_hash("test", "admin");
         let hex = format!("{:08x}{:08x}{:08x}{:08x}",
             hash[0], hash[1], hash[2], hash[3]);
         assert_eq!(hex.len(), 32);
 
-        // Verify via cpu_verify
         let salt = "admin".as_bytes();
         assert!(dcc.cpu_verify("test", salt, &hash[..4]));
 
-        // Wrong password should fail
         assert!(!dcc.cpu_verify("wrong", salt, &hash[..4]));
 
-        // parse_hash_string round-trip
         let full = format!("{}:admin", hex);
         let parsed = dcc.parse_hash_string(&full).unwrap();
         assert_eq!(parsed.hash_words[..4], hash[..4]);

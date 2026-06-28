@@ -1,48 +1,115 @@
 use std::str::FromStr;
 use crate::hashes::HashModule;
 
+/// All 42 supported hash algorithms.
+///
+/// Each variant maps to a [`HashModule`] implementation via [`HashType::module`].
+/// Auto-detection uses [`HashPattern`](crate::hashes::HashPattern) rules from each module.
+///
+/// ## Hashcat mode equivalence
+///
+/// | Variant | hashcat -m | Format |
+/// |---|---|---|
+/// | `Md5` | 0 | `hex(32)` |
+/// | `Sha1` | 100 | `hex(40)` |
+/// | `Sha256` | 1400 | `hex(64)` |
+/// | `Sha512` | 1700 | `hex(128)` |
+/// | `Ntlm` | 1000 | `hex(32)` |
+/// | `Bcrypt` | 3200 | `$2y$...` |
+/// | `Md5Crypt` | 500 | `$1$...` |
+/// | `Sha256Crypt` | 7400 | `$5$...` |
+/// | `Sha512Crypt` | 1800 | `$6$...` |
+/// | `Phpass` | 400 | `$P$...` / `$H$...` |
+/// | `Drupal7` | 7900 | `$S$...` |
+/// | `Pdf` | 10500/10700 | `$pdf$...` |
+/// | `Pkzip` | 17200 | `$pkzip$...` |
+/// | `KeePass` | 13400 | `$keepass$...` |
+/// | `SevenZip` | 11600 | `$7z$...` |
+/// | `Rar5` | 13000 | `$rar5$...` |
+/// | `Wpa` | 16800 | `hash:ap_mac:client_mac:ssid` |
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum HashType {
+    /// SHA-224 (56 hex chars)
     Sha224,
+    /// SHA-256 (64 hex chars)
     Sha256,
+    /// SHA-384 (96 hex chars)
     Sha384,
+    /// SHA-1 (40 hex chars)
     Sha1,
+    /// SHA-512 (128 hex chars)
     Sha512,
+    /// HMAC-SHA512
     HmacSha512,
+    /// MD5 (32 hex chars)
     Md5,
+    /// MD4 (32 hex chars)
     Md4,
+    /// NTLM (32 hex chars, MD4 of UTF-16LE)
     Ntlm,
+    /// NTLMv2 (HMAC-MD5, CPU-only)
     Ntlmv2,
+    /// md5crypt ($1$ prefix, 1000 iterations)
     Md5Crypt,
+    /// MSSQL 2005 (SHA-256 of uppercase password with salt)
     Mssql05,
+    /// MSSQL 2012 (SHA-512 of uppercase password with salt)
     Mssql12,
+    /// MySQL 4.1 (double SHA-1)
     Mysql41,
+    /// SHA-256 crypt ($5$ prefix, 5000 rounds)
     Sha256Crypt,
+    /// Double SHA-256
     Sha256d,
+    /// SHA-512 crypt ($6$ prefix, 5000 rounds)
     Sha512Crypt,
+    /// Double SHA-512
     Sha512d,
+    /// phpass ($P$ / $H$ prefix, MD5-based iterated hash)
     Phpass,
+    /// Apache APR1 ($apr1$ prefix, MD5-based 1000 iterations)
     Apr1,
+    /// bcrypt ($2y$ / $2b$ prefix)
     Bcrypt,
+    /// CRC32 (8 hex chars, CPU-only)
     Crc32,
+    /// Domain Cached Credentials (MD4-based, CPU-only)
     Dcc,
+    /// Domain Cached Credentials v2 (SHA-1 of MD4, CPU-only)
     Dcc2,
+    /// DB2 (SHA-1(password || salt || password))
     Db2,
+    /// Drupal 7 ($S$ prefix, SHA-512-based iterated)
     Drupal7,
+    /// GRUB 2 (PBKDF2-SHA512, CPU-only)
     Grub2,
+    /// PBKDF2-HMAC-SHA256
     Pbkdf2Sha256,
+    /// PostgreSQL MD5 (md5(password || username))
     Postgresql,
+    /// Salted SHA-1 (40 hex hash : salt)
     SaltedSha1,
+    /// Salted SHA-256 (64 hex hash : salt)
     SaltedSha256,
+    /// Salted SHA-512 (128 hex hash : salt)
     SaltedSha512,
+    /// PDF ($pdf$ prefix, AES-encrypted document hash)
     Pdf,
+    /// HMAC-SHA1
     HmacSha1,
+    /// HMAC-SHA256
     HmacSha256,
+    /// LM hash (DES-based, CPU-only)
     Lm,
+    /// WPA/WPA2 PMKID (PBKDF2-HMAC-SHA1, CPU-only)
     Wpa,
+    /// PKZIP ($pkzip$ prefix, CRC-32 stream cipher, CPU-only)
     Pkzip,
+    /// KeePass (.kdbx database hash)
     KeePass,
+    /// 7-Zip archive hash
     SevenZip,
+    /// RAR5 archive hash
     Rar5,
 }
 
@@ -94,12 +161,26 @@ impl HashType {
     }
 }
 
+/// Attack mode determines how password candidates are generated.
+///
+/// | Variant | Description |
+/// |---|---|
+/// | `BruteForce` | Sequential charset enumeration up to N chars |
+/// | `Mask` | Position-aware character classes (`?l?u?d?s?a`) |
+/// | `Wordlist` | Dictionary words, optionally with rules |
+/// | `Hybrid` | Wordlist × mask (prefix or suffix) |
+/// | `Prince` | Word concatenation chains (CPU-only, probability-ordered) |
 #[derive(Debug, Clone)]
 pub enum AttackMode {
+    /// All combinations of lowercase/uppercase/digits up to password_len
     BruteForce { password_len: u32 },
+    /// Position-aware pattern with charset encoding per slot
     Mask { mask: [u32; 16], keyspace: u64, password_len: u32 },
+    /// Dictionary words from a file, optionally transformed by rules
     Wordlist { words: Vec<String> },
+    /// Wordlist base extended with a mask suffix (or prefix via `--prefix`)
     Hybrid { words: Vec<String>, mask: [u32; 16], keyspace: u64, password_len: u32, suffix: bool },
+    /// Word-concatenation chains sorted by probability; CPU-only
     Prince { dict: Vec<String> },
 }
 
@@ -341,7 +422,6 @@ impl HashType {
             }
             HashType::Grub2 | HashType::Ntlmv2 | HashType::Wpa | HashType::Pkzip
             | HashType::KeePass | HashType::SevenZip | HashType::Rar5 => {
-                // Complex format types — cpu_hash not used (CPU-only wordlist fallback)
                 ([0u32; 8], [0u32; 8])
             }
             HashType::Md4 => {
@@ -502,7 +582,7 @@ impl HashType {
             }
             HashType::Pbkdf2Sha256 => {
                 let salt_bytes = salt.as_bytes();
-                let iterations = 1000u32; // default
+                let iterations = 1000u32;
                 let dk = crate::hashes::raw_pbkdf2_sha256::pbkdf2_hmac_sha256(password.as_bytes(), salt_bytes, iterations);
                 let mut target = [0u32; 8];
                 for i in 0..8 {
@@ -572,7 +652,6 @@ impl HashType {
                 (hash, [0u32; 8])
             }
             HashType::Pdf => {
-                // PDF uses verify-based comparison, not cpu_hash
                 ([0u32; 8], [0u32; 8])
             }
             HashType::HmacSha1 => {
@@ -641,8 +720,6 @@ impl HashType {
             }
             HashType::Sha384 | HashType::Sha512 | HashType::Sha512d | HashType::Mssql12 | HashType::Grub2 => {
                 let mut bytes = Vec::with_capacity(64);
-                // digest_words is u32 word count for cpu_verify (≥ 8 for SHA-512 family).
-                // For hex output, each u64 is reconstructed from 2 u32 halves.
                 let n = if dw > 8 { dw / 2 } else { dw };
                 for i in 0..n {
                     let word = (extra[i] as u64) << 32 | target[i] as u64;
@@ -703,7 +780,6 @@ impl HashType {
             }
             HashType::SaltedSha512 => {
                 let mut bytes = Vec::with_capacity(64);
-                // target/extra are [u32; 8], reconstruct 8 u64 words
                 for i in 0..8 {
                     let word = (extra[i] as u64) << 32 | target[i] as u64;
                     bytes.extend_from_slice(&word.to_be_bytes());
@@ -711,7 +787,6 @@ impl HashType {
                 hex::encode(bytes)
             }
             HashType::Pdf => {
-                // PDF hashes are $pdf$ formatted strings, not hex. Return U as hex.
                 let mut bytes = Vec::with_capacity(32);
                 for i in 0..8 {
                     bytes.extend_from_slice(&target[i].to_le_bytes());
@@ -779,7 +854,6 @@ impl FromStr for HashType {
             "rar5" | "rar" => Ok(HashType::Rar5),
             "auto" => Err("AUTO".to_string()),
             _ => {
-                // Try the registry for dynamic types
                 if crate::hashes::registry::find_by_name(s).is_some() {
                     Err(format!("AUTO:{}", s))
                 } else {
@@ -800,15 +874,12 @@ pub fn detect_hash_type(hex: &str) -> Option<HashType> {
         40 => Some(HashType::Sha1),
         128 => Some(HashType::Sha512),
           32 => {
-                // 32 hex chars: could be MD5, MD4, NTLM, or LM. Try MD5 first (most common).
                 Some(HashType::Md5)
             }
         _ => None,
     }
 }
 
-/// Combine hash_words and extra_words from ParsedHash into a single [u32; 16] array.
-/// All hash types have at most 16 u32 words (8 hash + 8 extra).
 pub fn full_hash_slice(parsed: &crate::hashes::ParsedHash, digest_words: usize) -> [u32; 16] {
     let mut combined = [0u32; 16];
     let n = digest_words.min(8);
